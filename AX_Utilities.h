@@ -6,7 +6,11 @@
 #define KRAKEN_AX_UTILITIES_H
 
 #include <Dynamixel.h>
+#include <Print.h>
 #include "Physical_Config.h"
+
+#define FREE_MOVE_SLOPE 0x80
+#define HOLDING_SLOPE 0x20
 
 #define dxlSuccessThreshold 2
 #define DXL_BUS_SERIAL1 1  //Dynamixel on Serial1(USART1) for 1000000 baud  <-OpenCM9.04
@@ -23,15 +27,19 @@ public:
     AxManager(void);
     ~AxManager();
     void initAxM();
+    void initAxM(Print *debugLine);
 
     //--------------//
     //  Interpolation Control
-    void AxManager::initInterpolate(unsigned long currentTimeMillis);
-    bool AxManager::interpolatePoses(unsigned long currentTimeMillis);
-    bool AxManager::interpolatePoses(unsigned long currentTimeMillis, bool zenoParadox);
-    bool AxManager::interpolatePoses(unsigned long currentTimeMillis, bool doPush, bool zenoParadox);
-    void AxManager::setTimeToArrival(unsigned long t2a);
-    bool AxManager::interpolateFinished();
+    void initInterpolate(unsigned long currentTimeMillis);
+    bool interpolatePoses(unsigned long currentTimeMillis);
+    bool interpolatePoses(unsigned long currentTimeMillis, bool zenoParadox);
+    bool interpolatePoses(unsigned long currentTimeMillis, bool doPush, bool zenoParadox);
+    void setTimeToArrival(unsigned long t2a);
+    bool interpolateFinished();
+    
+    void holdingMode(unsigned long idx_setMask);
+    void freeMoveMode(unsigned long idx_setMask);
 
     //--------------//
     //  Position
@@ -66,7 +74,11 @@ private:
     unsigned long lastInterpolationTimeMillis;
     unsigned long timeToArrivalMillis;
     int errorState;
+    Print *myDebugLine;
 
+    void _initAxM();
+    bool bulkCommand(unsigned long idx_setMask, word * table, int registerIndx, int regLength);
+    bool bulkCommand(unsigned long idx_setMask, word value, int registerIndx, int regLength);
     bool bulkCommand(int start_idx, int length_idx, word * table, int registerIndx, int regLength);
     bool bulkCommand(int start_idx, int length_idx, word value, int registerIndx, int regLength);
 };
@@ -83,7 +95,17 @@ AxManager::~AxManager(){
 
 }
 
+void AxManager::initAxM(Print * debugLine){
+  myDebugLine = debugLine;
+  this->_initAxM();
+}
+
 void AxManager::initAxM(){
+  myDebugLine = NULL;
+  this->_initAxM();
+}
+
+void AxManager::_initAxM(){
     Dxl.begin(3);
 
     // Inits
@@ -134,7 +156,7 @@ bool AxManager::interpolatePoses(unsigned long currentTimeMillis, bool zenoParad
 //doPush:       pushes interpolation to servos
 //zenoParadox:  makes the servo endlessly approach but never reach its target
 bool AxManager::interpolatePoses(unsigned long currentTimeMillis, bool doPush, bool zenoParadox) {
-    isSuccess = true;
+    bool isSuccess = true;
     unsigned long elapseTime = currentTimeMillis - lastInterpolationTimeMillis;
     float distanceFraction, reverseFraction = 0;
     if (timeToArrivalMillis > elapseTime) {
@@ -164,6 +186,18 @@ bool AxManager::interpolatePoses(unsigned long currentTimeMillis, bool doPush, b
 
 void AxManager::setTimeToArrival(unsigned long t2a){
     timeToArrivalMillis = t2a;
+}
+
+//Returns the servo's masked to the normal hold values for exerting force
+void AxManager::holdingMode(unsigned long idx_setMask){
+    word slope = DXL_MAKEWORD(HOLDING_SLOPE, HOLDING_SLOPE);
+    this->bulkCommand(idx_setMask, slope, AXM_CW_COMPLIANCE_SLOPE, 2);
+}
+
+//Switches servo's masked to a free-move state for no resistance movements to eliminate shaking
+void AxManager::freeMoveMode(unsigned long idx_setMask){
+    word slope = DXL_MAKEWORD(FREE_MOVE_SLOPE, FREE_MOVE_SLOPE);
+    this->bulkCommand(idx_setMask, slope, AXM_CW_COMPLIANCE_SLOPE, 2);
 }
 
 //--------------//
@@ -223,7 +257,7 @@ void AxManager::speedLimit(int servo_idx, word speed){
 //--------------//
 //  Torque
 bool AxManager::torqueRange(int start_idx, int length_idx, word torque){
-    for(int servo_idx = start_idx; servo_idx<length_idx; servo_idx++)
+    for(int servo_idx = start_idx; servo_idx < (start_idx + length_idx); servo_idx++)
         servoTable_Torque[servo_idx] = torque;
     return this->bulkCommand(start_idx, length_idx, servoTable_Torque, AXM_MAX_TORQUE_L, 2);
 }
@@ -240,18 +274,25 @@ void AxManager::torque(int servo_idx, word torque){
 void AxManager::toggleTorques(int start_idx, int length_idx, bool turnOn){
     //Turning on switches the servo to use the max torque setting as the torque limit
     // (my servos are configed to 1023)
-    word val = turnOn?1:0;
-    for(int servo_idx = start_idx; servo_idx<length_idx; servo_idx++)
-        servoTable_Torque[servo_idx] = val*MAX_SERVO_TORQUE;
-    return this->bulkCommand(start_idx, length_idx, val, AXM_TORQUE_ENABLE, 1);
+    word val = turnOn?MAX_SERVO_TORQUE:0;
+    for(int servo_idx = start_idx; servo_idx < (start_idx + length_idx); servo_idx++){
+//        if(myDebugLine){
+//            myDebugLine->print("ID: ");
+//            myDebugLine->print(servo_idx);
+//            myDebugLine->print(", Torque: ");
+//            myDebugLine->println(val);
+//        }
+        servoTable_Torque[servo_idx] = val;
+    }
+    this->bulkCommand(start_idx, length_idx, val, AXM_TORQUE_ENABLE, turnOn?1:0);
 }
 
 void AxManager::toggleTorques(bool turnOn){
     //Turning on switches the servo to use the max torque setting as the torque limit
     // (my servos are configed to 1023)
-    int val = turnOn?1:0;
+    word val = turnOn?MAX_SERVO_TORQUE:0;
     for(int servo_idx = 0; servo_idx<NUMSERVOS;servo_idx++)
-        servoTable_Torque[servo_idx] = val*MAX_SERVO_TORQUE;
+        servoTable_Torque[servo_idx] = val;
     Dxl.writeWord( BROADCAST_ID, AXM_TORQUE_ENABLE, turnOn?1:0 );
 }
 
@@ -284,7 +325,7 @@ bool AxManager::bulkCommand(int start_idx, int length_idx, word * table, int reg
     Dxl.pushByte(registerIndx);
     Dxl.pushByte(regLength);
 
-    for(int servo_idx=start_idx; servo_idx<length_idx; servo_idx++ ){
+    for(int servo_idx=start_idx; servo_idx< (start_idx + length_idx); servo_idx++ ){
         if ( (registerIndx == AXM_GOAL_POSITION_L) && (servoTable_Torque[servo_idx] == 0) )
             continue;
         Dxl.pushByte(servoTable_ID[servo_idx]);
@@ -306,7 +347,7 @@ bool AxManager::bulkCommand(int start_idx, int length_idx, word value, int regis
     Dxl.pushByte(registerIndx);
     Dxl.pushByte(regLength);
 
-    for(int servo_idx=start_idx; servo_idx<length_idx; servo_idx++ ){
+    for(int servo_idx=start_idx; servo_idx < (start_idx + length_idx); servo_idx++ ){
         if ( (registerIndx == AXM_GOAL_POSITION_L) && (servoTable_Torque[servo_idx] == 0) )
             continue;
         Dxl.pushByte(servoTable_ID[servo_idx]);
@@ -320,6 +361,60 @@ bool AxManager::bulkCommand(int start_idx, int length_idx, word value, int regis
     Dxl.flushPacket();
 
     return Dxl.getResult() < dxlSuccessThreshold; //Return codes above 1 are errors
+}
+
+bool AxManager::bulkCommand(unsigned long idx_setMask, word value, int registerIndx, int regLength)
+{
+    Dxl.initPacket(BROADCAST_ID, INST_SYNC_WRITE);
+    
+    Dxl.pushByte(registerIndx);
+    Dxl.pushByte(regLength);
+
+    for(int servo_idx=0; servo_idx< NUMSERVOS; servo_idx++ ){
+        if ( (idx_setMask & (1<<servo_idx)) == 0 )
+            continue;
+//        myDebugLine->print("ID: ");
+//        myDebugLine->println(servoTable_ID[servo_idx]);
+        if ( (registerIndx == AXM_GOAL_POSITION_L) && (servoTable_Torque[servo_idx] == 0) )
+            continue;
+        Dxl.pushByte(servoTable_ID[servo_idx]);
+        if (regLength == 2) {
+            Dxl.pushByte(DXL_LOBYTE(value));
+            Dxl.pushByte(DXL_HIBYTE(value));
+        } else if(regLength == 1){
+            Dxl.pushByte(DXL_LOBYTE(value));
+        }
+    }
+    Dxl.flushPacket();
+    
+    bool success = Dxl.getResult() < dxlSuccessThreshold; //Return codes above 1 are errors
+}
+
+bool AxManager::bulkCommand(unsigned long idx_setMask, word * table, int registerIndx, int regLength)
+{
+    Dxl.initPacket(BROADCAST_ID, INST_SYNC_WRITE);
+    
+    Dxl.pushByte(registerIndx);
+    Dxl.pushByte(regLength);
+
+    for(int servo_idx=0; servo_idx< NUMSERVOS; servo_idx++ ){
+        if ( (idx_setMask & (1<<servo_idx)) == 0 )
+            continue;
+//        myDebugLine->print("ID: ");
+//        myDebugLine->println(servoTable_ID[servo_idx]);
+        if ( (registerIndx == AXM_GOAL_POSITION_L) && (servoTable_Torque[servo_idx] == 0) )
+            continue;
+        Dxl.pushByte(servoTable_ID[servo_idx]);
+        if (regLength == 2) {
+            Dxl.pushByte(DXL_LOBYTE(table[servo_idx]));
+            Dxl.pushByte(DXL_HIBYTE(table[servo_idx]));
+        } else if(regLength == 1){
+            Dxl.pushByte(DXL_LOBYTE(table[servo_idx]));
+        }
+    }
+    Dxl.flushPacket();
+    
+    bool success = Dxl.getResult() < dxlSuccessThreshold; //Return codes above 1 are errors
 }
 
 #endif //KRAKEN_AX_UTILITIES_H
