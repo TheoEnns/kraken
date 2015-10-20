@@ -40,6 +40,8 @@ public:
     
     void holdingMode(unsigned long idx_setMask);
     void freeMoveMode(unsigned long idx_setMask);
+    void holdingMode();
+    void freeMoveMode();
 
     //--------------//
     //  Position
@@ -198,6 +200,18 @@ void AxManager::holdingMode(unsigned long idx_setMask){
 void AxManager::freeMoveMode(unsigned long idx_setMask){
     word slope = DXL_MAKEWORD(FREE_MOVE_SLOPE, FREE_MOVE_SLOPE);
     this->bulkCommand(idx_setMask, slope, AXM_CW_COMPLIANCE_SLOPE, 2);
+}
+
+//Returns the servo's masked to the normal hold values for exerting force
+void AxManager::holdingMode(){
+    word slope = DXL_MAKEWORD(HOLDING_SLOPE, HOLDING_SLOPE);
+    Dxl.writeWord( BROADCAST_ID, AXM_CW_COMPLIANCE_SLOPE, slope );
+}
+
+//Switches servo's masked to a free-move state for no resistance movements to eliminate shaking
+void AxManager::freeMoveMode(){
+    word slope = DXL_MAKEWORD(FREE_MOVE_SLOPE, FREE_MOVE_SLOPE);
+    Dxl.writeWord( BROADCAST_ID, AXM_CW_COMPLIANCE_SLOPE, slope );
 }
 
 //--------------//

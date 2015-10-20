@@ -9,9 +9,11 @@ void setup() {
   SerialUSB.begin();
   axm.initAxM(&SerialUSB);
   delay(3000);
+
   axm.toggleTorques(hipH_Index, 30, true);
-  axm.torqueRange(hipH_Index, 24, 1023);
+  axm.torqueRange(hipH_Index, 24, 900);
   axm.torqueRange(foot_Index, 6, 300);
+
   SerialUSB.print("Current Voltage on right: ");
   SerialUSB.println(axm.voltage(0),2);
   SerialUSB.print("Current Voltage on left: ");
