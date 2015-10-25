@@ -49,9 +49,9 @@ public:
     bool pushPose(); //Takes an average of 1270 microsecs without speeds
     bool setAllPositions(word pos);
     bool getPositions();
-    void position(int servo_idx, word pos);
-    int position(int servo_idx);
-    int position(int servo_idx, bool * success);
+    void position(int servo_idx, word pos, bool useTXRX);
+    int position(int servo_idx, bool useTXRX);
+    int setPosition(int servo_idx, bool * success);
 
     //--------------//
     //  Speed
@@ -239,18 +239,22 @@ bool AxManager::getPositions(){
     return success;
 }
 
-void AxManager::position(int servo_idx, word pos){
+void AxManager::position(int servo_idx, word pos, bool useTXRX){
+    pos = LIMIT(pos,0,1023);
     servoTable_Pose[servo_idx] = pos;
-    Dxl.goalPosition(servoTable_ID[servo_idx],pos);
+    if(useTXRX)
+        Dxl.goalPosition(servoTable_ID[servo_idx],pos);
 }
 
-int AxManager::position(int servo_idx){
-    word pos = Dxl.getPosition(servoTable_ID[servo_idx]);
-    servoTable_Pose[servo_idx] = (pos <= 1023) && (pos >= 0) ? pos : servoTable_Pose[servo_idx];
+int AxManager::position(int servo_idx, bool useTXRX) {
+    if (useTXRX) {
+        word pos = Dxl.getPosition(servoTable_ID[servo_idx]);
+        servoTable_Pose[servo_idx] = (pos <= 1023) && (pos >= 0) ? pos : servoTable_Pose[servo_idx];
+    }
     return servoTable_Pose[servo_idx];
 }
 
-int AxManager::position(int servo_idx, bool * success){
+int AxManager::setPosition(int servo_idx, bool * success){
     word pos = Dxl.getPosition(servoTable_ID[servo_idx]);
     servoTable_Pose[servo_idx] = (pos <= 1023) && (pos >= 0) ? pos : servoTable_Pose[servo_idx];
     *success = (pos <= 1023) && (pos >= 0) ? (*success): false;
