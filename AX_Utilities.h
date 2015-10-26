@@ -27,7 +27,6 @@ public:
     AxManager(void);
     ~AxManager();
     void initAxM();
-    void initAxM(Print *debugLine);
 
     //--------------//
     //  Interpolation Control
@@ -76,7 +75,6 @@ private:
     unsigned long lastInterpolationTimeMillis;
     unsigned long timeToArrivalMillis;
     int errorState;
-    Print *myDebugLine;
 
     void _initAxM();
     bool bulkCommand(unsigned long idx_setMask, word * table, int registerIndx, int regLength);
@@ -93,13 +91,7 @@ AxManager::~AxManager(){
 
 }
 
-void AxManager::initAxM(Print * debugLine){
-  myDebugLine = debugLine;
-  this->_initAxM();
-}
-
 void AxManager::initAxM(){
-  myDebugLine = NULL;
   this->_initAxM();
 }
 
@@ -296,12 +288,6 @@ void AxManager::toggleTorques(int start_idx, int length_idx, bool turnOn){
     // (my servos are configed to 1023)
     word val = turnOn?MAX_SERVO_TORQUE:0;
     for(int servo_idx = start_idx; servo_idx < (start_idx + length_idx); servo_idx++){
-//        if(myDebugLine){
-//            myDebugLine->print("ID: ");
-//            myDebugLine->print(servo_idx);
-//            myDebugLine->print(", Torque: ");
-//            myDebugLine->println(val);
-//        }
         servoTable_Torque[servo_idx] = val;
     }
     this->bulkCommand(start_idx, length_idx, val, AXM_TORQUE_ENABLE, turnOn?1:0);
@@ -397,8 +383,6 @@ bool AxManager::bulkCommand(unsigned long idx_setMask, word value, int registerI
         if ( (registerIndx == AXM_GOAL_POSITION_L) && (servoTable_Torque[servo_idx] == 0) ){
             continue;
         }
-//        myDebugLine->print("ID: ");
-//        myDebugLine->println(servoTable_ID[servo_idx]);
         Dxl.pushByte((byte)(servoTable_ID[servo_idx]));
         if (regLength == 2) {
             Dxl.pushByte((byte)(DXL_LOBYTE(value)));
@@ -422,8 +406,6 @@ bool AxManager::bulkCommand(unsigned long idx_setMask, word * table, int registe
     for(int servo_idx=0; servo_idx< NUMSERVOS; servo_idx++ ){
         if ( (idx_setMask & (1<<servo_idx)) == 0 )
             continue;
-//        myDebugLine->print("ID: ");
-//        myDebugLine->println(servoTable_ID[servo_idx]);
         if ( (registerIndx == AXM_GOAL_POSITION_L) && (servoTable_Torque[servo_idx] == 0) )
             continue;
         Dxl.pushByte(servoTable_ID[servo_idx]);
