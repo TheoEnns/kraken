@@ -49,9 +49,9 @@ public:
     bool pushPose(); //Takes an average of 1270 microsecs without speeds
     bool setAllPositions(word pos);
     bool getPositions();
-    void position(int servo_idx, word pos, bool useTXRX);
-    int position(int servo_idx, bool useTXRX);
-    int setPosition(int servo_idx, bool * success);
+    void setPosition(int servo_idx, word pos, bool useTXRX);
+    int getPosition(int servo_idx, bool useTXRX, bool * success);
+    int getPosition(int servo_idx, bool useTXRX);
 
     //--------------//
     //  Speed
@@ -84,10 +84,6 @@ private:
     bool bulkCommand(int start_idx, int length_idx, word * table, int registerIndx, int regLength);
     bool bulkCommand(int start_idx, int length_idx, word value, int registerIndx, int regLength);
 };
-
-bool AxManager::interpolateFinished(){
-    return (timeToArrivalMillis>0);
-}
 
 AxManager::AxManager(void){
     errorState = AxM_Healthy;
@@ -214,6 +210,10 @@ void AxManager::freeMoveMode(){
     Dxl.writeWord( BROADCAST_ID, AXM_CW_COMPLIANCE_SLOPE, slope );
 }
 
+bool AxManager::interpolateFinished(){
+    return (timeToArrivalMillis <= 0);
+}
+
 //--------------//
 //  Position
 bool AxManager::pushPose(int start_idx, int length_idx){
@@ -235,29 +235,31 @@ bool AxManager::setAllPositions(word pos){
 bool AxManager::getPositions(){
     bool success = true;
     for(int servo_idx = 0; servo_idx<NUMSERVOS; servo_idx++)
-        this->position(servo_idx,&success);
+        this->getPosition(servo_idx,true,&success);
     return success;
 }
 
-void AxManager::position(int servo_idx, word pos, bool useTXRX){
+void AxManager::setPosition(int servo_idx, word pos, bool useTXRX){
     pos = LIMIT(pos,0,1023);
     servoTable_Pose[servo_idx] = pos;
     if(useTXRX)
         Dxl.goalPosition(servoTable_ID[servo_idx],pos);
 }
 
-int AxManager::position(int servo_idx, bool useTXRX) {
+int AxManager::getPosition(int servo_idx, bool useTXRX, bool * success) {
     if (useTXRX) {
         word pos = Dxl.getPosition(servoTable_ID[servo_idx]);
         servoTable_Pose[servo_idx] = (pos <= 1023) && (pos >= 0) ? pos : servoTable_Pose[servo_idx];
+        *success = (pos <= 1023) && (pos >= 0) ? (*success): false;
     }
     return servoTable_Pose[servo_idx];
 }
 
-int AxManager::setPosition(int servo_idx, bool * success){
-    word pos = Dxl.getPosition(servoTable_ID[servo_idx]);
-    servoTable_Pose[servo_idx] = (pos <= 1023) && (pos >= 0) ? pos : servoTable_Pose[servo_idx];
-    *success = (pos <= 1023) && (pos >= 0) ? (*success): false;
+int AxManager::getPosition(int servo_idx, bool useTXRX){
+    if (useTXRX) {
+        word pos = Dxl.getPosition(servoTable_ID[servo_idx]);
+        servoTable_Pose[servo_idx] = (pos <= 1023) && (pos >= 0) ? pos : servoTable_Pose[servo_idx];
+    }
     return servoTable_Pose[servo_idx];
 }
 
@@ -385,22 +387,24 @@ bool AxManager::bulkCommand(unsigned long idx_setMask, word value, int registerI
 {
     Dxl.initPacket(BROADCAST_ID, INST_SYNC_WRITE);
     
-    Dxl.pushByte(registerIndx);
-    Dxl.pushByte(regLength);
+    Dxl.pushByte((byte)(registerIndx));
+    Dxl.pushByte((byte)(regLength));
 
-    for(int servo_idx=0; servo_idx< NUMSERVOS; servo_idx++ ){
-        if ( (idx_setMask & (1<<servo_idx)) == 0 )
+    for(int servo_idx = 0; servo_idx < NUMSERVOS; servo_idx++ ){
+        if ( (idx_setMask & (1<<servo_idx)) == 0 ){
             continue;
+        }
+        if ( (registerIndx == AXM_GOAL_POSITION_L) && (servoTable_Torque[servo_idx] == 0) ){
+            continue;
+        }
 //        myDebugLine->print("ID: ");
 //        myDebugLine->println(servoTable_ID[servo_idx]);
-        if ( (registerIndx == AXM_GOAL_POSITION_L) && (servoTable_Torque[servo_idx] == 0) )
-            continue;
-        Dxl.pushByte(servoTable_ID[servo_idx]);
+        Dxl.pushByte((byte)(servoTable_ID[servo_idx]));
         if (regLength == 2) {
-            Dxl.pushByte(DXL_LOBYTE(value));
-            Dxl.pushByte(DXL_HIBYTE(value));
+            Dxl.pushByte((byte)(DXL_LOBYTE(value)));
+            Dxl.pushByte((byte)(DXL_HIBYTE(value)));
         } else if(regLength == 1){
-            Dxl.pushByte(DXL_LOBYTE(value));
+            Dxl.pushByte((byte)(DXL_LOBYTE(value)));
         }
     }
     Dxl.flushPacket();
