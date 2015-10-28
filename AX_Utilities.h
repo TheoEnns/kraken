@@ -83,6 +83,8 @@ private:
 
 AxManager::AxManager(void){
     errorState = AxM_Healthy;
+    lastInterpolationTimeMillis = 0;
+    timeToArrivalMillis = 0;
 }
 
 AxManager::~AxManager(){
@@ -97,8 +99,6 @@ void AxManager::_initAxM(){
     Dxl.begin(3);
 
     // Inits
-    lastInterpolationTimeMillis = 0;
-    timeToArrivalMillis = 0;
 
     //Use bulk commands when possible
 
@@ -420,5 +420,7 @@ bool AxManager::bulkTransmit(int start_idx, int length_idx, word value, int regi
 //    
 //    bool success = Dxl.getResult() < dxlSuccessThreshold; //Return codes above 1 are errors
 //}
+
+AxManager axm;
 
 #endif //KRAKEN_AX_UTILITIES_H

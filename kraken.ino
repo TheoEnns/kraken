@@ -10,20 +10,38 @@
 #include "Physical_Config.h"
 #include "AX_Utilities.h"
 #include "LegIKEngine.h"
+#include "GaitGenerator.h"
 #include "SerialComm.h"
 
-SerialComm serialComms;
-AxManager axm;
-LegIKEngine legIK;
+#define RUN_WITHOUT_SERVOS 1
+
+//SerialComm serialComms;
+//AxManager axm;
+//LegIKEngine legIK;
+//GaitGenerator gaitGen;
 
 unsigned long curTime;
 unsigned long volt_Timer = 0;
+unsigned long gait_Timer = 0;
+unsigned long servo_Timer = 0;
+unsigned long volt_Rate = 4000;
+unsigned long gait_Rate = GAIT_INTERPOLATION_RATE;
+unsigned long servo_Rate = 10;
+unsigned long curMicros = 0;
+float averageElapse;
+float maxElapse;
 
-void report_Voltage(){
+void report_Health(){
     serialComms.startJsonMsg();
-    serialComms.printVar("Right Battery Voltage", axm.servoVoltage(RIGHT_BATTERY_SERVO_ID));
-    serialComms.printVar("Left Battery Voltage", axm.servoVoltage(LEFT_BATTERY_SERVO_ID));
+    serialComms.printVar("Rate_ms", averageElapse/volt_Rate);
+    serialComms.printVar("Peak_ms", maxElapse);
+#ifndef RUN_WITHOUT_SERVOS
+    serialComms.printVar("Right_Voltage", axm.servoVoltage(RIGHT_BATTERY_SERVO_ID));
+    serialComms.printVar("Left_Voltage", axm.servoVoltage(LEFT_BATTERY_SERVO_ID));
+#endif
     serialComms.endJsonMsg();
+    averageElapse = 0;
+    maxElapse = 0;
 }
   
 void setup() {
@@ -32,8 +50,6 @@ void setup() {
     delay(1000);
 
     axm.initAxM();
-    delay(100);
-    report_Voltage();
     delay(1000);
 
     axm.getPositions();
@@ -43,16 +59,17 @@ void setup() {
     axm.speedLimits(350);
     
     //Move HipH to init pose
+    SerialUSB.println("HipH positioning...");
     delay(5);
     axm.toggleTorques(hipH_Index, 6, true);
     delay(5);
     initServos(hipH_Index, hipH_Index+6, 512);
     axm.pushPose(hipH_Index, 6);
     delay(750);
-//    waitOnServos(hipH_Index, hipH_Index + 6);
-    SerialUSB.println("HipH positioning...");
+    waitOnServos(hipH_Index, hipH_Index + 6);
 
     //Move HipV to init pose
+    SerialUSB.println("HipV positioning...");
     delay(5);
     axm.toggleTorques(hipV_cw_Index, 12, true);
     delay(5);
@@ -60,28 +77,27 @@ void setup() {
     initServos(hipV_ccw_Index, hipV_ccw_Index+6, 205);
     axm.pushPose(hipV_cw_Index, 12);
     delay(750);
-//    waitOnServos(hipV_cw_Index, hipV_cw_Index+12);
-    SerialUSB.println("HipV positioning...");
+    waitOnServos(hipV_cw_Index, hipV_cw_Index+12);
 
     //Move Knee to init pose
+    SerialUSB.println("Knee positioning...");
     delay(5);
     axm.toggleTorques(knee_Index, 6, true);
     delay(5);
     initServos(knee_Index, knee_Index+6, 819);
     axm.pushPose(knee_Index, 6);
     delay(750);
-//    waitOnServos(knee_Index, knee_Index+6);
-    SerialUSB.println("Knee positioning...");
+    waitOnServos(knee_Index, knee_Index+6);
 
     //Move Foot to init pose
+    SerialUSB.println("Foot positioning...");
     delay(5);
     axm.toggleTorques(foot_Index, 6, true);
     delay(5);
     initServos(foot_Index, foot_Index+6, 512);
     axm.pushPose(foot_Index, 6);
     delay(750);
-//    waitOnServos(foot_Index, foot_Index+6);
-    SerialUSB.println("Foot positioning...");
+    waitOnServos(foot_Index, foot_Index+6);
     
     for(int servo_Idx = 0; servo_Idx < NUMSERVOS; servo_Idx++){
         servoTable_Target[servo_Idx] = servoTable_Pose[servo_Idx];
@@ -108,130 +124,62 @@ void initServos(int startIndx, int endIndx, word pos){
 }
 
 void waitOnServos(int startIndx, int endIndx){
+#ifndef RUN_WITHOUT_SERVOS
     for (int servo_Idx = startIndx; servo_Idx < endIndx; servo_Idx++){
         while (axm.is_moving(servo_Idx)){
             delay(5);
             if (volt_Timer < curTime) {
-                report_Voltage();
+                report_Health();
                 volt_Timer = 4000 + curTime;
             }
         }
     }
-}
-
-void oscillate(int swing, int jointOffset){
-    int servo_idx;
-    for(int i = 0; i < legCount; i++) {
-        servo_idx = i + jointOffset;
-        servoTable_Target[servo_idx] = 512 + swing;
-    }
-}
-
-float r0 = 95.25 + 175.05;
-float z0 = -(122.76 + 32.25);
-float p0 = 60.0*3.14159/180.0;
-COORD3D effector;
-void setTarget(int i, int phase, float period, int legMod, float dr){
-    LegIndex indx = LegIndex(i);
-    bool isUp = (phase == (i%legMod));
-    float periodS; 
-    float periodC;
-    float vel;
-    if(isUp){
-        periodS = sin(M_PI*period);
-        periodC = cos(M_PI*period);
-        vel = dr*(legMod-1);
-    }else{
-        periodS = 0;
-        periodC = cos(M_PI*(period + phase - (i%legMod) - 1)/(legMod-1));
-        vel = dr*(-1);
-    }
-    effector.x = (r0)*cos( p0*(i+1) + vel*periodC);
-    effector.y = (r0)*sin( p0*(i+1) + vel*periodC);
-    effector.z = (z0) + fabs(90.0*periodS);
-    legIK.effector(indx, effector);
-    int error = legIK.leg3DOF_Inverse(indx);
-    if (error>0) {
-        serialComms.startJsonMsg();
-        serialComms.printVar("IK_Error", error);
-        serialComms.endJsonMsg();
-    }else{
-        servoTable_Target[hipH_Index + i] = LIMIT(ANGLE_TO_SERVO(legIK.angle_hipH(indx),true),0,1023);
-        servoTable_Target[hipV_cw_Index + i] = LIMIT(ANGLE_TO_SERVO(legIK.angle_hipV(indx),true),0,1023);
-        servoTable_Target[hipV_ccw_Index + i] = LIMIT(ANGLE_TO_SERVO(legIK.angle_hipV(indx),false),0,1023);
-        servoTable_Target[knee_Index + i] = LIMIT(ANGLE_TO_SERVO(legIK.angle_knee(indx),false),0,1023);
-        servoTable_Target[foot_Index + i] = LIMIT(ANGLE_TO_SERVO(legIK.angle_ankle(indx),false),0,1023);
-        
-        axm.setTimeToArrival(100);
-        axm.initInterpolate(curTime);
-    }
+#endif
 }
 
 void loop() {
-    int averagePerLegIK = 0;
-    int ikCounter = 0;
-    unsigned long effTimer;
-    int legMod = 3;
-    float stepTime = 2000.0;
-//    float x0 = 95.25 + 175.05;
-//    float y0 = 95.25 + 175.05;
-//    float z0 = -(122.76 + 32.25);
-//    float p0 = 60.0*3.14159/180.0;
-    SerialUSB.println("ik positioning...");  
-   
+    int legCalcIndex = 0;
+    int elapse = 0;
+    int delta = 0;
+
+    gaitGen.switchGaitModulus(2);
+    gaitGen.setNextTrajectory(0,0,M_PI/6);
+
+    volt_Timer = millis() + volt_Timer;
+    gait_Timer = millis() + gait_Rate;
+    servo_Timer = millis() + servo_Rate;
+
+    SerialUSB.println("ik positioning...");
     while(true){
         curTime = millis();
-        if (axm.interpolateFinished()) {
-//            float periodS = sin(M_PI*(millis()/2000.0f));
-//            float periodC = cos(M_PI*(millis()/2000.0f));
-            int phase = ((int)(curTime/(stepTime)))%legMod;
-            float period = ((float)curTime)/stepTime;
-            period = period -  floor(period);
-            for(int i =0;i<6;i++){
-//                LegIndex indx = LegIndex(i);
-                  effTimer = micros();
-                  setTarget(i, phase, period, legMod, M_PI*30.0/180);
-//                COORD3D effector;
-//                int isUp = periodS>=0?i%2:(i+1)%2;
-//                int dir = ((1-2*i)%2);
-//                effector.x = (x0)*cos( p0*(i+1) + dir*((0) - (p0/2)*periodC));
-//                effector.y = (y0)*sin( p0*(i+1) + dir*((0) - (p0/2)*periodC));
-//                effector.z = (z0) + fabs(90.0*periodS)*isUp;
-//                legIK.effector(indx, effector);
-//                error = legIK.leg3DOF_Inverse(indx);
-//                if (error>0) {
-//                    serialComms.startJsonMsg();
-//                    serialComms.printVar("IK_Error", error);
-//                    serialComms.endJsonMsg();
-//                    error = 0;
-//                }else{
-//                    servoTable_Target[hipH_Index + i] = LIMIT(ANGLE_TO_SERVO(legIK.angle_hipH(indx),true),0,1023);
-//                    servoTable_Target[hipV_cw_Index + i] = LIMIT(ANGLE_TO_SERVO(legIK.angle_hipV(indx),true),0,1023);
-//                    servoTable_Target[hipV_ccw_Index + i] = LIMIT(ANGLE_TO_SERVO(legIK.angle_hipV(indx),false),0,1023);
-//                    servoTable_Target[knee_Index + i] = LIMIT(ANGLE_TO_SERVO(legIK.angle_knee(indx),false),0,1023);
-//                    servoTable_Target[foot_Index + i] = LIMIT(ANGLE_TO_SERVO(legIK.angle_ankle(indx),false),0,1023);
-//                    
-//                    axm.setTimeToArrival(100);
-//                    axm.initInterpolate(curTime);
-//                }
-                effTimer = micros()-effTimer;
-                averagePerLegIK += effTimer;
-                ikCounter++;
-            }
-            delayMicroseconds(500);
-        }else{
-          delay(4);
+        curMicros = micros();
+        if ( (legCalcIndex >= CNT_LEGS) && (gait_Timer < curTime)) {
+            gaitGen.pushIKtoTarget();
+            axm.initInterpolate(curTime);
+            axm.setTimeToArrival(GAIT_INTERPOLATION_TARGET_TIME);
+
+            gaitGen.updateTargetTime(curTime);
+            gait_Timer = gait_Rate + curTime;
+            legCalcIndex = 0;
+        }
+        if (servo_Timer < curTime) {
+            axm.interpolatePoses(curTime);
+            servo_Timer = servo_Rate + curTime;
         }
         if (volt_Timer < curTime) {
-            report_Voltage();
-            volt_Timer = 4000 + curTime;
-            serialComms.startJsonMsg(true);
-            serialComms.printVar("IK per Leg (us)", (averagePerLegIK/(40)),true);
-            serialComms.endJsonMsg(true);
-            averagePerLegIK = 0;
-            ikCounter = 0;
+            report_Health();
+            volt_Timer = volt_Rate + curTime;
         }
-        axm.interpolatePoses(curTime);
-        delay(6);
+        if (legCalcIndex < CNT_LEGS) {
+            interpolateNextWalk(legCalcIndex);
+            legCalcIndex++;
+        }
+        elapse = micros() - curMicros;
+        delta = minRate*1000 - elapse;
+        averageElapse += elapse;
+        maxElapse = maxElapse>elapse?maxElapse:elapse;
+        if(delta > 0) {
+            delayMicroseconds(delta);
+        }
     }
 }

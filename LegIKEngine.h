@@ -46,9 +46,6 @@ typedef struct _LEG_POSE {
 
     bool isValidEffector;
     bool isValidForeward;
-    
-    public:
-      _LEG_POSE() {memset(this, 0, sizeof(_LEG_POSE));}
 } LEG_POSE;
 
 enum IK_Error_T{
@@ -106,7 +103,7 @@ private:
 };
 
 LegIKEngine::LegIKEngine(void) {
-//    memset(ik_legs, 0, CNT_LEGS * sizeof(LEG_POSE));
+    memset(ik_legs, 0, CNT_LEGS * sizeof(LEG_POSE));
   
 //    for(int leg_Index = 0; leg_Index < CNT_LEGS; leg_Index++){
 //        ik_legs[leg_Index].isValidEffector = false;
@@ -376,5 +373,7 @@ void LegIKEngine::setStepParameters(LegIndex legIndex, float liftHeight, float g
     thisLeg->liftHeight = liftHeight;
     thisLeg->groundHeight = groundHeight;
 }
+
+LegIKEngine legIK;
 
 #endif //KRAKEN_LEGIKENGINE_H
