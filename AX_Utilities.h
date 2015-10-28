@@ -5,8 +5,6 @@
 #ifndef KRAKEN_AX_UTILITIES_H
 #define KRAKEN_AX_UTILITIES_H
 
-#include <Dynamixel.h>
-#include <Print.h>
 #include "Physical_Config.h"
 
 #define FREE_MOVE_SLOPE 0x80
@@ -68,7 +66,7 @@ public:
 
     //--------------//
     //  Misc
-    float voltage(int servo_idx);
+    float servoVoltage(int servo_idx);
     bool is_moving(int servo_idx);
 
 private:
@@ -77,10 +75,10 @@ private:
     int errorState;
 
     void _initAxM();
-    bool bulkCommand(unsigned long idx_setMask, word * table, int registerIndx, int regLength);
-    bool bulkCommand(unsigned long idx_setMask, word value, int registerIndx, int regLength);
-    bool bulkCommand(int start_idx, int length_idx, word * table, int registerIndx, int regLength);
-    bool bulkCommand(int start_idx, int length_idx, word value, int registerIndx, int regLength);
+//    bool bulkTransmitTable(uint32_t idx_setMask, word * table, int registerIndx, int regLength);
+//    bool bulkTransmit(uint32_t idx_setMask, word value, int registerIndx, int regLength);
+    bool bulkTransmitTable(int start_idx, int length_idx, word * table, int registerIndx, int regLength);
+    bool bulkTransmit(int start_idx, int length_idx, word value, int registerIndx, int regLength);
 };
 
 AxManager::AxManager(void){
@@ -92,7 +90,7 @@ AxManager::~AxManager(){
 }
 
 void AxManager::initAxM(){
-  this->_initAxM();
+  _initAxM();
 }
 
 void AxManager::_initAxM(){
@@ -112,7 +110,7 @@ void AxManager::_initAxM(){
     }
 
     //Grab current servo positions
-    bool error = this->getPositions();
+    bool error = getPositions();
     if(error)
         errorState |= 1<<AxM_InvalidResponseFromServo;
 
@@ -133,13 +131,13 @@ void AxManager::initInterpolate(unsigned long currentTimeMillis){
 //currentTimeMillis: get from millis(), rolls over in ~50 days, so no concern for a hexapod
 //zenoParadox:  makes the servo endlessly approach but never reach its target
 bool AxManager::interpolatePoses(unsigned long currentTimeMillis) {
-    return this->interpolatePoses(currentTimeMillis, true, false);
+    return interpolatePoses(currentTimeMillis, true, false);
 }
 
 //currentTimeMillis: get from millis(), rolls over in ~50 days, so no concern for a hexapod
 //zenoParadox:  makes the servo endlessly approach but never reach its target
 bool AxManager::interpolatePoses(unsigned long currentTimeMillis, bool zenoParadox) {
-    return this->interpolatePoses(currentTimeMillis, true, zenoParadox);
+    return interpolatePoses(currentTimeMillis, true, zenoParadox);
 }
 
 //currentTimeMillis: get from millis(), rolls over in ~50 days, so no concern for a hexapod
@@ -167,7 +165,7 @@ bool AxManager::interpolatePoses(unsigned long currentTimeMillis, bool doPush, b
     }
 
     if(doPush){
-        isSuccess = this->pushPose();
+        isSuccess = pushPose();
     }
 
     lastInterpolationTimeMillis = currentTimeMillis;
@@ -178,17 +176,17 @@ void AxManager::setTimeToArrival(unsigned long t2a){
     timeToArrivalMillis = t2a;
 }
 
-//Returns the servo's masked to the normal hold values for exerting force
-void AxManager::holdingMode(unsigned long idx_setMask){
-    word slope = DXL_MAKEWORD(HOLDING_SLOPE, HOLDING_SLOPE);
-    this->bulkCommand(idx_setMask, slope, AXM_CW_COMPLIANCE_SLOPE, 2);
-}
-
-//Switches servo's masked to a free-move state for no resistance movements to eliminate shaking
-void AxManager::freeMoveMode(unsigned long idx_setMask){
-    word slope = DXL_MAKEWORD(FREE_MOVE_SLOPE, FREE_MOVE_SLOPE);
-    this->bulkCommand(idx_setMask, slope, AXM_CW_COMPLIANCE_SLOPE, 2);
-}
+////Returns the servo's masked to the normal hold values for exerting force
+//void AxManager::holdingMode(unsigned long idx_setMask){
+//    word slope = DXL_MAKEWORD(HOLDING_SLOPE, HOLDING_SLOPE);
+//    bulkTransmit(idx_setMask, slope, AXM_CW_COMPLIANCE_SLOPE, 2);
+//}
+//
+////Switches servo's masked to a free-move state for no resistance movements to eliminate shaking
+//void AxManager::freeMoveMode(unsigned long idx_setMask){
+//    word slope = DXL_MAKEWORD(FREE_MOVE_SLOPE, FREE_MOVE_SLOPE);
+//    bulkTransmit(idx_setMask, slope, AXM_CW_COMPLIANCE_SLOPE, 2);
+//}
 
 //Returns the servo's masked to the normal hold values for exerting force
 void AxManager::holdingMode(){
@@ -203,31 +201,31 @@ void AxManager::freeMoveMode(){
 }
 
 bool AxManager::interpolateFinished(){
-    return (timeToArrivalMillis <= 0);
+    return (timeToArrivalMillis == 0);
 }
 
 //--------------//
 //  Position
 bool AxManager::pushPose(int start_idx, int length_idx){
-    return this->bulkCommand(start_idx, length_idx, servoTable_Pose, AXM_GOAL_POSITION_L, 2);
+    return bulkTransmitTable(start_idx, length_idx, servoTable_Pose, AXM_GOAL_POSITION_L, 2);
 }
 
 bool AxManager::pushPose(){
-    return this->bulkCommand(0, NUMSERVOS, servoTable_Pose, AXM_GOAL_POSITION_L, 2);
+    return bulkTransmitTable(0, NUMSERVOS, servoTable_Pose, AXM_GOAL_POSITION_L, 2);
 }
 
 bool AxManager::setAllPositions(word pos){
     for(int servo_idx=0; servo_idx < NUMSERVOS; servo_idx++) {
         servoTable_Pose[servo_idx] = pos;
     }
-    return this->pushPose();
+    return pushPose();
 }
 
 //This is a good test for servo presence!
 bool AxManager::getPositions(){
     bool success = true;
     for(int servo_idx = 0; servo_idx<NUMSERVOS; servo_idx++)
-        this->getPosition(servo_idx,true,&success);
+        getPosition(servo_idx,true,&success);
     return success;
 }
 
@@ -271,7 +269,7 @@ void AxManager::speedLimit(int servo_idx, word speed){
 bool AxManager::torqueRange(int start_idx, int length_idx, word torque){
     for(int servo_idx = start_idx; servo_idx < (start_idx + length_idx); servo_idx++)
         servoTable_Torque[servo_idx] = torque;
-    return this->bulkCommand(start_idx, length_idx, servoTable_Torque, AXM_MAX_TORQUE_L, 2);
+    return bulkTransmitTable(start_idx, length_idx, servoTable_Torque, AXM_MAX_TORQUE_L, 2);
 }
 
 int AxManager::torque(int servo_idx){
@@ -290,7 +288,7 @@ void AxManager::toggleTorques(int start_idx, int length_idx, bool turnOn){
     for(int servo_idx = start_idx; servo_idx < (start_idx + length_idx); servo_idx++){
         servoTable_Torque[servo_idx] = val;
     }
-    this->bulkCommand(start_idx, length_idx, val, AXM_TORQUE_ENABLE, turnOn?1:0);
+    bulkTransmit(start_idx, length_idx, val, AXM_TORQUE_ENABLE, turnOn?1:0);
 }
 
 void AxManager::toggleTorques(bool turnOn){
@@ -315,9 +313,11 @@ void AxManager::toggleTorque(int servo_idx, bool turnOn){
 
 //--------------//
 //  Misc
-float AxManager::voltage(int servo_idx){
+float AxManager::servoVoltage(int servo_idx){
     //AX returns a value equal to .1V
-    return 0.1f*Dxl.getVolt(servoTable_ID[servo_idx]);
+    int decVolt = Dxl.getVolt(servoTable_ID[servo_idx]);
+//    decVolt = decVolt==255:-1:decVolt; //255 means the servo is not responding
+    return 0.1f*decVolt;
 }
 
 //Return true if traveling
@@ -325,7 +325,7 @@ bool AxManager::is_moving(int servo_idx){
     return (Dxl.isMoving(servoTable_ID[servo_idx])!=0);
 }
 
-bool AxManager::bulkCommand(int start_idx, int length_idx, word * table, int registerIndx, int regLength){
+bool AxManager::bulkTransmitTable(int start_idx, int length_idx, word * table, int registerIndx, int regLength){
     Dxl.initPacket(BROADCAST_ID, INST_SYNC_WRITE);
 
     Dxl.pushByte(registerIndx);
@@ -347,7 +347,7 @@ bool AxManager::bulkCommand(int start_idx, int length_idx, word * table, int reg
     return Dxl.getResult() < dxlSuccessThreshold; //Return codes above 1 are errors
 }
 
-bool AxManager::bulkCommand(int start_idx, int length_idx, word value, int registerIndx, int regLength){
+bool AxManager::bulkTransmit(int start_idx, int length_idx, word value, int registerIndx, int regLength){
     Dxl.initPacket(BROADCAST_ID, INST_SYNC_WRITE);
 
     Dxl.pushByte(registerIndx);
@@ -369,56 +369,56 @@ bool AxManager::bulkCommand(int start_idx, int length_idx, word value, int regis
     return Dxl.getResult() < dxlSuccessThreshold; //Return codes above 1 are errors
 }
 
-bool AxManager::bulkCommand(unsigned long idx_setMask, word value, int registerIndx, int regLength)
-{
-    Dxl.initPacket(BROADCAST_ID, INST_SYNC_WRITE);
-    
-    Dxl.pushByte((byte)(registerIndx));
-    Dxl.pushByte((byte)(regLength));
-
-    for(int servo_idx = 0; servo_idx < NUMSERVOS; servo_idx++ ){
-        if ( (idx_setMask & (1<<servo_idx)) == 0 ){
-            continue;
-        }
-        if ( (registerIndx == AXM_GOAL_POSITION_L) && (servoTable_Torque[servo_idx] == 0) ){
-            continue;
-        }
-        Dxl.pushByte((byte)(servoTable_ID[servo_idx]));
-        if (regLength == 2) {
-            Dxl.pushByte((byte)(DXL_LOBYTE(value)));
-            Dxl.pushByte((byte)(DXL_HIBYTE(value)));
-        } else if(regLength == 1){
-            Dxl.pushByte((byte)(DXL_LOBYTE(value)));
-        }
-    }
-    Dxl.flushPacket();
-    
-    bool success = Dxl.getResult() < dxlSuccessThreshold; //Return codes above 1 are errors
-}
-
-bool AxManager::bulkCommand(unsigned long idx_setMask, word * table, int registerIndx, int regLength)
-{
-    Dxl.initPacket(BROADCAST_ID, INST_SYNC_WRITE);
-    
-    Dxl.pushByte(registerIndx);
-    Dxl.pushByte(regLength);
-
-    for(int servo_idx=0; servo_idx< NUMSERVOS; servo_idx++ ){
-        if ( (idx_setMask & (1<<servo_idx)) == 0 )
-            continue;
-        if ( (registerIndx == AXM_GOAL_POSITION_L) && (servoTable_Torque[servo_idx] == 0) )
-            continue;
-        Dxl.pushByte(servoTable_ID[servo_idx]);
-        if (regLength == 2) {
-            Dxl.pushByte(DXL_LOBYTE(table[servo_idx]));
-            Dxl.pushByte(DXL_HIBYTE(table[servo_idx]));
-        } else if(regLength == 1){
-            Dxl.pushByte(DXL_LOBYTE(table[servo_idx]));
-        }
-    }
-    Dxl.flushPacket();
-    
-    bool success = Dxl.getResult() < dxlSuccessThreshold; //Return codes above 1 are errors
-}
+//bool AxManager::bulkTransmit(uint32_t idx_setMask, word value, int registerIndx, int regLength)
+//{
+//    Dxl.initPacket(BROADCAST_ID, INST_SYNC_WRITE);
+//    
+//    Dxl.pushByte((byte)(registerIndx));
+//    Dxl.pushByte((byte)(regLength));
+//
+//    for(int servo_idx = 0; servo_idx < NUMSERVOS; servo_idx++ ){
+//        if ( (idx_setMask & (1<<servo_idx)) == 0 ){
+//            continue;
+//        }
+//        if ( (registerIndx == AXM_GOAL_POSITION_L) && (servoTable_Torque[servo_idx] == 0) ){
+//            continue;
+//        }
+//        Dxl.pushByte((byte)(servoTable_ID[servo_idx]));
+//        if (regLength == 2) {
+//            Dxl.pushByte((byte)(DXL_LOBYTE(value)));
+//            Dxl.pushByte((byte)(DXL_HIBYTE(value)));
+//        } else if(regLength == 1){
+//            Dxl.pushByte((byte)(DXL_LOBYTE(value)));
+//        }
+//    }
+//    Dxl.flushPacket();
+//    
+//    bool success = Dxl.getResult() < dxlSuccessThreshold; //Return codes above 1 are errors
+//}
+//
+//bool AxManager::bulkTransmitTable(uint32_t idx_setMask, word * table, int registerIndx, int regLength)
+//{
+//    Dxl.initPacket(BROADCAST_ID, INST_SYNC_WRITE);
+//    
+//    Dxl.pushByte(registerIndx);
+//    Dxl.pushByte(regLength);
+//
+//    for(int servo_idx=0; servo_idx< NUMSERVOS; servo_idx++ ){
+//        if ( (idx_setMask & (1<<servo_idx)) == 0 )
+//            continue;
+//        if ( (registerIndx == AXM_GOAL_POSITION_L) && (servoTable_Torque[servo_idx] == 0) )
+//            continue;
+//        Dxl.pushByte(servoTable_ID[servo_idx]);
+//        if (regLength == 2) {
+//            Dxl.pushByte(DXL_LOBYTE(table[servo_idx]));
+//            Dxl.pushByte(DXL_HIBYTE(table[servo_idx]));
+//        } else if(regLength == 1){
+//            Dxl.pushByte(DXL_LOBYTE(table[servo_idx]));
+//        }
+//    }
+//    Dxl.flushPacket();
+//    
+//    bool success = Dxl.getResult() < dxlSuccessThreshold; //Return codes above 1 are errors
+//}
 
 #endif //KRAKEN_AX_UTILITIES_H
