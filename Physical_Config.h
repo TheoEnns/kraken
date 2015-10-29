@@ -152,7 +152,8 @@ const JOINT3D femurStructure[CNT_LEGS] =
 //Y-Axis: The upwards direction for the robot
 //Z-Axis: The clockwise direction about the robot for the leg
 const SEGMENT3D tibiaSegment =
-        {{ 34.429f, -131.0f, 0.0f},    (90.0f)*M_PI/180.0f,   (-90.0f)*M_PI/180.0f,    0.257004f};
+        {{ 29.2328f, -119.0263f, 0.0f},    (90.0f)*M_PI/180.0f,   (-90.0f)*M_PI/180.0f,    0.257004f};
+//        {{ 34.429f, -131.0f, 0.0f},    (90.0f)*M_PI/180.0f,   (-90.0f)*M_PI/180.0f,    0.257004f};
 const JOINT3D tibiaStructure[CNT_LEGS] =
     {
         //leg 0  knee -> tibia
@@ -174,7 +175,8 @@ const JOINT3D tibiaStructure[CNT_LEGS] =
 //Y-Axis: (unused right now) length of the foot parallel to ground (heel to toes)
 //Z-Axis: (unused right now) width of the foot
 const SEGMENT3D footSegment =
-        {{ 32.25f, 47.439f, 52.16f},    (90.0f)*M_PI/180.0f,   (-90.0f)*M_PI/180.0f,    0.0f};
+        {{ 6.25f, 6.25f, 6.25f},    (90.0f)*M_PI/180.0f,   (-90.0f)*M_PI/180.0f,    0.0f};
+//        {{ 32.25f, 47.439f, 52.16f},    (90.0f)*M_PI/180.0f,   (-90.0f)*M_PI/180.0f,    0.0f};
 const JOINT3D footStructure[CNT_LEGS] =
     {
         //leg 0  foot -> ground

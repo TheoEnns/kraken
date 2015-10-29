@@ -47,7 +47,6 @@ typedef struct _Coord2D {
 //    float      y1;
 //} ARC2D;
 
-
 //This specialized arc describes a movement (dx/dt,dy/dt,dr/dt) about the robots origin
 typedef struct _Parametized_Arc2D {
     float dx;

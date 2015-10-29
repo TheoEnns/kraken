@@ -105,7 +105,7 @@ void setup() {
     initServos(foot_Index, foot_Index+6, 512);
     axm.pushPose(foot_Index, 6);
     delay(750);
-    waitOnServos(foot_Index, foot_Index+6);
+//    waitOnServos(foot_Index, foot_Index+6);
     
     for(int servo_Idx = 0; servo_Idx < NUMSERVOS; servo_Idx++){
         servoTable_Target[servo_Idx] = servoTable_Pose[servo_Idx];
@@ -153,7 +153,7 @@ void loop() {
     int elapse = 0;
     int delta = 0;
 
-    gaitGen.switchGaitModulus(3);
+    gaitGen.switchGaitModulus(2);
     gaitGen.generateCenters();
 
     volt_Timer = millis() + volt_Timer;
@@ -167,7 +167,7 @@ void loop() {
         curTime = millis();
         curMicros = micros();
         if ( (legCalcIndex >= CNT_LEGS) && (gait_Timer < curTime)) {
-            gaitGen.setNextTrajectory(0,0,M_PI/3.01);
+            gaitGen.setNextTrajectory(0,100,0.0*M_PI);
             gaitGen.pushIKtoTarget();
             axm.initInterpolate(curTime);
             axm.setTimeToArrival(GAIT_INTERPOLATION_TARGET_TIME);

@@ -8,16 +8,17 @@
 #include "Physical_Types_And_Conversions.h"
 #include "Physical_Config.h"
 #include "LegIKEngine.h"
+#include "AX_Utilities.h"
 #include "SerialComm.h"
 
 #define REPORT_IK_FAILURE       1
 //#define USE_GAIT_OVERSHOOT      1
 
-#define DEF_STEP_UP_PERIOD      750.0f
+#define DEF_STEP_UP_PERIOD      500.0f
 #define DEF_STEP_HEIGHT         90.0f
-#define DEF_GROUND_HEIGHT       -155.01f
-#define DEF_CENTER_EXTENSION    175.05f
-#define DEF_MAX_VEL_TRANS       75.0//35.0f
+#define DEF_GROUND_HEIGHT       -140.0f //80 min, 180 max
+#define DEF_CENTER_EXTENSION    189.05f
+#define DEF_MAX_VEL_TRANS       200.0//35.0f
 #define DEF_MAX_VEL_ROTATE      1.0472f
 
 #define SERVO_INTERPOLATION_RATE 10
@@ -88,6 +89,8 @@ private:
     GAIT_DESCRIPTOR fGait;
     TRAJECTORY_2D cTrajectory;
     TRAJECTORY_2D fTrajectory;
+    unsigned long idx_setMask_up;
+    unsigned long idx_setMask_down;
 
     unsigned long targetTime;
     unsigned long timeOffset;
@@ -245,7 +248,8 @@ void GaitManager::setTarget(int legIndx){
 
 void GaitManager::updatePhase(){
     fraction = ((float)(targetTime - timeOffset))/(cGait.upStepPeriod*cGait.legModulus);
-
+    int oldPhase = phase;
+    
     //phase rollover - increment the offset, time for switching walk state
     if(fraction > cGait.legModulus) {
         timeOffset = targetTime;
@@ -259,6 +263,20 @@ void GaitManager::updatePhase(){
     } else {
         phase = (int) floor(fraction);
         fraction = fraction - phase;
+    }
+    
+    //When switching phase, update the up/down masks
+    // phase == up leg always!
+    if(oldPhase != phase){
+        idx_setMask_up = 0;
+        for(int servoIndx = 0; servoIndx < foot_Index; servoIndx++){
+            if( (servoIndx%legCount) == phase ){
+                idx_setMask_up = idx_setMask_up | (1<<servoIndx);
+            }
+        }
+        idx_setMask_down = !(idx_setMask_up);
+        axm.holdingMode(idx_setMask_down);
+        axm.freeMoveMode(idx_setMask_up);
     }
 
     if(cWalkState == walk_active) {
