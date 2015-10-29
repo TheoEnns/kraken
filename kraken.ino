@@ -116,11 +116,14 @@ void setup() {
     delay(5);
     axm.toggleTorques(hipH_Index, maxJoint_Index, true);
     delay(5);
-    axm.torqueRange(hipH_Index, foot_Index, 900);
+//    axm.torqueRange(hipH_Index, foot_Index, 900);
+//    axm.torqueRange(hipH_Index, foot_Index, 1023);
     delay(5);
-    axm.torqueRange(foot_Index, maxJoint_Index, 300);
+//    axm.torqueRange(foot_Index, maxJoint_Index, 300);
+//    axm.torqueRange(foot_Index, maxJoint_Index, 900);
     delay(5);
     axm.freeMoveMode();
+//    axm.holdingMode();
     delay(5);
 }
 
@@ -150,8 +153,8 @@ void loop() {
     int elapse = 0;
     int delta = 0;
 
-    gaitGen.switchGaitModulus(2);
-    gaitGen.setNextTrajectory(0,0,M_PI/6);
+    gaitGen.switchGaitModulus(3);
+    gaitGen.generateCenters();
 
     volt_Timer = millis() + volt_Timer;
     gait_Timer = millis() + gait_Rate;
@@ -164,6 +167,7 @@ void loop() {
         curTime = millis();
         curMicros = micros();
         if ( (legCalcIndex >= CNT_LEGS) && (gait_Timer < curTime)) {
+            gaitGen.setNextTrajectory(0,0,M_PI/3.01);
             gaitGen.pushIKtoTarget();
             axm.initInterpolate(curTime);
             axm.setTimeToArrival(GAIT_INTERPOLATION_TARGET_TIME);

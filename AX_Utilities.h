@@ -8,6 +8,7 @@
 #include "Physical_Config.h"
 
 #define FREE_MOVE_SLOPE 0x80
+//#define FREE_MOVE_SLOPE 0x40
 #define HOLDING_SLOPE 0x20
 
 #define dxlSuccessThreshold 2
