@@ -421,6 +421,6 @@ bool AxManager::bulkTransmit(int start_idx, int length_idx, word value, int regi
 //    bool success = Dxl.getResult() < dxlSuccessThreshold; //Return codes above 1 are errors
 //}
 
-AxManager axm;
+extern AxManager axm;
 
 #endif //KRAKEN_AX_UTILITIES_H

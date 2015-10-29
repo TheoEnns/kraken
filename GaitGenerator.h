@@ -5,8 +5,8 @@
 #ifndef KRAKEN_GAITGENERATOR_H
 #define KRAKEN_GAITGENERATOR_H
 
-#include "Physical_Config.h"
 #include "Physical_Types_And_Conversions.h"
+#include "Physical_Config.h"
 #include "LegIKEngine.h"
 #include "SerialComm.h"
 
@@ -38,9 +38,9 @@ enum WALK_STATE_T{
 };
 
 typedef struct _Trajectory_Vector {
-    float dr; //radians per sec (+ is counterclock)
     float dx; //units (I use mm) per sec, + is to the right
     float dy; //units (I use mm) per sec, + is foreword
+    float dr; //radians per sec (+ is counterclock)
 } TRAJECTORY_2D;
 
 typedef struct _Gait_Descriptor {
@@ -50,17 +50,18 @@ typedef struct _Gait_Descriptor {
     float groundHeight;
     float maxTransVelocity;
     float maxRotVelocity;
-
-    public:
-        _Gait_Descriptor(int mod) {
-            legModulus = mod;
-            upStepPeriod = DEF_STEP_UP_PERIOD;
-            stepHeight = DEF_STEP_HEIGHT;
-            groundHeight = DEF_GROUND_HEIGHT;
-            maxTransVelocity = DEF_MAX_VEL_TRANS;
-            maxRotVelocity = DEF_MAX_VEL_ROTATE;
-        }
 } GAIT_DESCRIPTOR;
+
+GAIT_DESCRIPTOR gaitDescriptor(int newModulus){
+    GAIT_DESCRIPTOR newGait;
+    newGait.legModulus = newModulus;
+    newGait.upStepPeriod = DEF_STEP_UP_PERIOD;
+    newGait.stepHeight = DEF_STEP_HEIGHT;
+    newGait.groundHeight = DEF_GROUND_HEIGHT;
+    newGait.maxTransVelocity = DEF_MAX_VEL_TRANS;
+    newGait.maxRotVelocity = DEF_MAX_VEL_ROTATE;
+    return newGait;
+}
 
 class GaitManager {
 public:
@@ -70,14 +71,14 @@ public:
 //--------------//
 //  Gait interpolations
     void updateTargetTime(unsigned long newTime);
-    void interpolateNextWalk(int legIndx);
+    IK_Error_T interpolateNextWalk(int legIndx);
     int getInterpolationTime();
     void pushIKtoTarget();
 
 //--------------//
 //  Gait transitions
     void switchGaitModulus(int newModulus);
-    bool setNextTrajectory(dx,dy,dr);
+    bool setNextTrajectory(float dx, float dy, float dr);
 
 private:
     WALK_STATE_T cWalkState;
@@ -98,7 +99,7 @@ private:
 //--------------//
 //  Internal Gait mechanisms
     void setTarget(int legIndx);
-    void updatePhase(unsigned long timer);
+    void updatePhase();
     void setTarget_Start(int legIndx);
     void setTarget_MidStep(int legIndx);
     void setTarget_End(int legIndx);
@@ -106,7 +107,7 @@ private:
 
 //--------------//
 //  Leg Placement
-    COORD_3D deltaFromCenter(float tdx, float tdy, float tdr, float tdz);
+    COORD3D deltaFromCenter(int legIndx, float tdx, float tdy, float tdr, float tdz);
     void generateCenters();
 
 };
@@ -115,10 +116,13 @@ private:
 GaitManager::GaitManager(void){
     cWalkState = walk_idle;
     fWalkState = walk_idle;
-    cGait = GAIT_DESCRIPTOR(2);
-    fGait = GAIT_DESCRIPTOR(2);
-    cTrajectory = TRAJECTORY_2D{0f,0f,0f};
-    fTrajectory = TRAJECTORY_2D{0f,0f,0f};
+    cGait = gaitDescriptor(2);
+    cGait.legModulus = 2;
+    fGait = gaitDescriptor(2);
+    fGait.legModulus = 2;
+    
+    cTrajectory = TRAJECTORY_2D{0.0f,0.0f,0.0f};
+    fTrajectory = TRAJECTORY_2D{0.0f,0.0f,0.0f};
 
     targetTime = 0;
     timeOffset = 0;
@@ -142,11 +146,11 @@ void GaitManager::updateTargetTime(unsigned long newTime){
 
 IK_Error_T GaitManager::interpolateNextWalk(int legIndx){
     setTarget(legIndx);
-    IK_Error_T error = legIK.leg3DOF_Inverse(legIndx);
+    IK_Error_T error = legIK.leg3DOF_Inverse((LegIndex)legIndx);
 #ifdef REPORT_IK_FAILURE
     if (error > ik_Success) {
         serialComms.startJsonMsg();
-        serialComms.printVar("IK_Error", (int)(error));
+        serialComms.printVar("IK_Error", (int) error);
         serialComms.printVar("Leg", legIndx);
         serialComms.endJsonMsg();
     }
@@ -159,17 +163,18 @@ int GaitManager::getInterpolationTime(){
 }
 
 void GaitManager::pushIKtoTarget() {
-    for(int legIndx = 0; legIndx < CNT_LEGS; legIndx++) {
-        if (legIK.isValidEffector()) {
-            servoTable_Target[hipH_Index + legIndx] =
+    for(int i = 0; i < CNT_LEGS; i++) {
+        LegIndex legIndx = (LegIndex)2;
+        if (legIK.isValidEffector(legIndx)) {
+            servoTable_Target[hipH_Index + i] =
                     LIMIT(ANGLE_TO_SERVO(legIK.angle_hipH(legIndx), true), 0, 1023);
-            servoTable_Target[hipV_cw_Index + legIndx] =
+            servoTable_Target[hipV_cw_Index + i] =
                     LIMIT(ANGLE_TO_SERVO(legIK.angle_hipV(legIndx), true), 0, 1023);
-            servoTable_Target[hipV_ccw_Index + legIndx] =
+            servoTable_Target[hipV_ccw_Index + i] =
                     LIMIT(ANGLE_TO_SERVO(legIK.angle_hipV(legIndx), false), 0, 1023);
-            servoTable_Target[knee_Index + legIndx] =
+            servoTable_Target[knee_Index + i] =
                     LIMIT(ANGLE_TO_SERVO(legIK.angle_knee(legIndx), false), 0, 1023);
-            servoTable_Target[foot_Index + legIndx] =
+            servoTable_Target[foot_Index + i] =
                     LIMIT(ANGLE_TO_SERVO(legIK.angle_ankle(legIndx), false), 0, 1023);
         }
     }
@@ -178,13 +183,13 @@ void GaitManager::pushIKtoTarget() {
 //--------------//
 //  Gait transitions
 void GaitManager::switchGaitModulus(int newModulus){
-    fGait = GAIT_DESCRIPTOR(newModulus);
+    fGait = gaitDescriptor(newModulus);
     if(cWalkState=walk_idle) {
         cGait = fGait;
     }
 }
 
-bool GaitManager::setNextTrajectory(dx,dy,dr){
+bool GaitManager::setNextTrajectory(float dx, float dy, float dr){
     float vel = sqrt(dx*dx+dy*dy);
     if (vel > cGait.maxTransVelocity)
         return false;
@@ -198,7 +203,7 @@ bool GaitManager::setNextTrajectory(dx,dy,dr){
         if(cWalkState == walk_idle) {
             fWalkState = walk_idle;
         } else {
-            fWalkState = walk_end;
+            fWalkState = walk_stopping;
         }
     } else {
         if(cWalkState == walk_idle) {
@@ -226,17 +231,17 @@ void GaitManager::setTarget(int legIndx){
             setTarget_End(legIndx);
             break;
         case walk_idle:
-            setTarget_idle(legIndx);
+            setTarget_Idle(legIndx);
             break;
     }
 }
 
 void GaitManager::updatePhase(){
-    fraction = ((float)(timer - targetTime))/(cGait.upStepPeriod*cGait.legModulus);
+    fraction = ((float)(targetTime - timeOffset))/(cGait.upStepPeriod*cGait.legModulus);
 
     //phase rollover - increment the offset, time for switching walk state
     if(fraction > cGait.legModulus) {
-        timeOffset = timer;
+        timeOffset = targetTime;
         cWalkState = fWalkState;
         fraction = 0;
         phase = 0;
@@ -251,7 +256,7 @@ void GaitManager::updatePhase(){
             if (cGait.legModulus == 2) {
                 //Switch to new trajectory is safe in legMod == 2 when at half step
                 cTrajectory = fTrajectory;
-                memset(fTrajectory, 0, sizeof(_LEG_POSE));)
+                fTrajectory = TRAJECTORY_2D{0,0,0};
             }
         } else {
             midStepToggle = false;
@@ -268,21 +273,21 @@ void GaitManager::setTarget_Start(int legIndx) {
     int legModDelta = (mod - phase)%cGait.legModulus;
     if (legModDelta==0) {
         if(mod == 0) {
-            legIK.effector(legIndx, deltaFromCenter(
+            legIK.effector((LegIndex)legIndx, deltaFromCenter( legIndx, 
                     cTrajectory.dx / 4 - cos(M_PI * fraction) * cTrajectory.dx / 4,
                     cTrajectory.dy / 4 - cos(M_PI * fraction) * cTrajectory.dy / 4,
                     cTrajectory.dr / 4 - cos(M_PI * fraction) * cTrajectory.dr / 4,
                     cGait.stepHeight * fabs(sin(M_PI * fraction))
             ));
         }else if (mod == (cGait.legModulus-1)){
-            legIK.effector(legIndx, deltaFromCenter(
+            legIK.effector((LegIndex)legIndx, deltaFromCenter( legIndx, 
                     -(cTrajectory.dx / 4 - cos(M_PI * fraction) * cTrajectory.dx / 4),
                     -(cTrajectory.dy / 4 - cos(M_PI * fraction) * cTrajectory.dy / 4),
                     -(cTrajectory.dr / 4 - cos(M_PI * fraction) * cTrajectory.dr / 4),
                     cGait.stepHeight * fabs(sin(M_PI * fraction))
             ));
         }else{
-            legIK.effector(legIndx, legCenters[legIndx]);
+            legIK.effector((LegIndex)legIndx, legCenters[legIndx]);
         }
     }
 }
@@ -291,15 +296,15 @@ void GaitManager::setTarget_MidStep(int legIndx) {
     int mod = (legIndx % cGait.legModulus);
     int legModDelta = (mod - phase)%cGait.legModulus;
     if (legModDelta==0) {
-        legIK.effector(legIndx, deltaFromCenter(
+        legIK.effector((LegIndex)legIndx, deltaFromCenter( legIndx, 
                 (cos(M_PI * fraction) * cTrajectory.dx / 2),
                 (cos(M_PI * fraction) * cTrajectory.dy / 2),
                 (cos(M_PI * fraction) * cTrajectory.dr / 2),
                 cGait.stepHeight * fabs(sin(M_PI * fraction))
         ));
     } else {// if (mod == (cGait.legModulus-1)){
-        float dualFraction = fraction/(legModulus-1);
-        legIK.effector(legIndx, deltaFromCenter(
+        float dualFraction = fraction/(cGait.legModulus-1);
+        legIK.effector((LegIndex)legIndx, deltaFromCenter( legIndx, 
                 -(cos(M_PI * dualFraction) * cTrajectory.dx / 2),
                 -(cos(M_PI * dualFraction) * cTrajectory.dy / 2),
                 -(cos(M_PI * dualFraction) * cTrajectory.dr / 2),
@@ -313,32 +318,32 @@ void GaitManager::setTarget_End(int legIndx) {
     int legModDelta = (mod - phase)%cGait.legModulus;
     if (legModDelta==0) {
         if(mod == 0) {
-            legIK.effector(legIndx, deltaFromCenter(
+            legIK.effector((LegIndex)legIndx, deltaFromCenter( legIndx, 
                     cTrajectory.dx / 4 + cos(M_PI * fraction) * cTrajectory.dx / 4,
                     cTrajectory.dy / 4 + cos(M_PI * fraction) * cTrajectory.dy / 4,
                     cTrajectory.dr / 4 + cos(M_PI * fraction) * cTrajectory.dr / 4,
                     cGait.stepHeight * fabs(sin(M_PI * fraction))
             ));
         }else if (mod == (cGait.legModulus-1)){
-            legIK.effector(legIndx, deltaFromCenter(
+            legIK.effector((LegIndex)legIndx, deltaFromCenter( legIndx, 
                     -(cTrajectory.dx / 4 + cos(M_PI * fraction) * cTrajectory.dx / 4),
                     -(cTrajectory.dy / 4 + cos(M_PI * fraction) * cTrajectory.dy / 4),
                     -(cTrajectory.dr / 4 + cos(M_PI * fraction) * cTrajectory.dr / 4),
                     cGait.stepHeight * fabs(sin(M_PI * fraction))
             ));
         }else{
-            legIK.effector(legIndx, legCenters[legIndx]);
+            legIK.effector((LegIndex)legIndx, legCenters[legIndx]);
         }
     }
 }
 
 void GaitManager::setTarget_Idle(int legIndx) {
-    legIK.effector(indx, legCenters[legIndx]);
+    legIK.effector((LegIndex)legIndx, legCenters[legIndx]);
 }
 
 //--------------//
 //  Leg Placement
-COORD_3D GaitManager::deltaFromCenter(float tdx, float tdy, float tdr, float tdz){
+COORD3D GaitManager::deltaFromCenter(int legIndx, float tdx, float tdy, float tdr, float tdz){
     COORD3D newPoint;
     newPoint.x = cos(tdr)*legCenters[legIndx].x - sin(tdr)*legCenters[legIndx].y + tdx;
     newPoint.y = sin(tdr)*legCenters[legIndx].x + cos(tdr)*legCenters[legIndx].y + tdy;
@@ -346,9 +351,9 @@ COORD_3D GaitManager::deltaFromCenter(float tdx, float tdy, float tdr, float tdz
     return newPoint;
 }
 
-COORD_3D GaitManager::generateCenters() {
+void GaitManager::generateCenters() {
     for(int legIndx = 0; legIndx<CNT_LEGS; legIndx++) {
-        legCenters[legIndx] = COORD_3D{
+        legCenters[legIndx] = COORD3D{
                 hipSegment[legIndx].segVect.x + DEF_CENTER_EXTENSION * cos(hipSegment[legIndx].effectorAngle),
                 hipSegment[legIndx].segVect.y + DEF_CENTER_EXTENSION * sin(hipSegment[legIndx].effectorAngle),
                 cGait.groundHeight
@@ -356,6 +361,6 @@ COORD_3D GaitManager::generateCenters() {
     }
 }
 
-GaitManager gaitGen;
+extern GaitManager gaitGen;
 
 #endif //KRAKEN_GAITGENERATOR_H

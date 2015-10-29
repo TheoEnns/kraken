@@ -3,8 +3,10 @@
 #include <Dynamixel.h> //AX_Utilities,
 #include <string.h> //LegIKEngine (for memset),
 
-#include <usb_Serial.h>
-#include <HardwareSerial.h>
+#include <usb_Serial.h> //SerialComm.h
+#include <HardwareSerial.h> //SerialComm.h
+
+//#define RUN_WITHOUT_SERVOS 1
 
 #include "Physical_Types_And_Conversions.h"
 #include "Physical_Config.h"
@@ -13,12 +15,11 @@
 #include "GaitGenerator.h"
 #include "SerialComm.h"
 
-#define RUN_WITHOUT_SERVOS 1
 
-//SerialComm serialComms;
-//AxManager axm;
-//LegIKEngine legIK;
-//GaitGenerator gaitGen;
+SerialComm serialComms;
+AxManager axm;
+LegIKEngine legIK;
+GaitManager gaitGen;
 
 unsigned long curTime;
 unsigned long volt_Timer = 0;
@@ -27,14 +28,20 @@ unsigned long servo_Timer = 0;
 unsigned long volt_Rate = 4000;
 unsigned long gait_Rate = GAIT_INTERPOLATION_RATE;
 unsigned long servo_Rate = 10;
+unsigned long minRate = 5;
 unsigned long curMicros = 0;
 float averageElapse;
 float maxElapse;
+int cycleCount;
 
 void report_Health(){
     serialComms.startJsonMsg();
-    serialComms.printVar("Rate_ms", averageElapse/volt_Rate);
-    serialComms.printVar("Peak_ms", maxElapse);
+    if(cycleCount>0) {
+      serialComms.printVar("Rate_us", averageElapse/(cycleCount));
+    } else {
+      serialComms.printVar("Rate_us", 0);
+    }
+    serialComms.printVar("Peak_us", (int)maxElapse);
 #ifndef RUN_WITHOUT_SERVOS
     serialComms.printVar("Right_Voltage", axm.servoVoltage(RIGHT_BATTERY_SERVO_ID));
     serialComms.printVar("Left_Voltage", axm.servoVoltage(LEFT_BATTERY_SERVO_ID));
@@ -42,6 +49,7 @@ void report_Health(){
     serialComms.endJsonMsg();
     averageElapse = 0;
     maxElapse = 0;
+    cycleCount = 0;
 }
   
 void setup() {
@@ -148,6 +156,8 @@ void loop() {
     volt_Timer = millis() + volt_Timer;
     gait_Timer = millis() + gait_Rate;
     servo_Timer = millis() + servo_Rate;
+    cycleCount = 0;
+    bool ignoreCycle = false;
 
     SerialUSB.println("ik positioning...");
     while(true){
@@ -169,15 +179,23 @@ void loop() {
         if (volt_Timer < curTime) {
             report_Health();
             volt_Timer = volt_Rate + curTime;
+            ignoreCycle = true;
+        }else{
+            ignoreCycle = false;
         }
         if (legCalcIndex < CNT_LEGS) {
-            interpolateNextWalk(legCalcIndex);
+            gaitGen.interpolateNextWalk(legCalcIndex);
             legCalcIndex++;
         }
-        elapse = micros() - curMicros;
+        elapse = micros() - curMicros; 
+        //peak: ~32-30 ms when report_Health(),
+       //    2 ms peak otherwise
         delta = minRate*1000 - elapse;
-        averageElapse += elapse;
-        maxElapse = maxElapse>elapse?maxElapse:elapse;
+        if(!ignoreCycle){
+            averageElapse += elapse;
+            maxElapse = maxElapse>elapse?maxElapse:elapse;
+            cycleCount++;
+        }
         if(delta > 0) {
             delayMicroseconds(delta);
         }

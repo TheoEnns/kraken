@@ -125,6 +125,6 @@ void SerialComm::endJsonMsg() {
     endJsonMsg(false);
 }
 
-SerialComm serialComms;
+extern SerialComm serialComms;
 
 #endif

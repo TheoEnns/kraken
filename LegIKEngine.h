@@ -374,6 +374,6 @@ void LegIKEngine::setStepParameters(LegIndex legIndex, float liftHeight, float g
     thisLeg->groundHeight = groundHeight;
 }
 
-LegIKEngine legIK;
+extern LegIKEngine legIK;
 
 #endif //KRAKEN_LEGIKENGINE_H
