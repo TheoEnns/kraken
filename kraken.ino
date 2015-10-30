@@ -14,6 +14,7 @@
 #include "LegIKEngine.h"
 #include "GaitGenerator.h"
 #include "SerialComm.h"
+#include "Commander.h"
 
 
 SerialComm serialComms;
@@ -33,15 +34,21 @@ unsigned long curMicros = 0;
 float averageElapse;
 float maxElapse;
 int cycleCount;
+float velY = 0;
+float velX = 0;
+float velR = 0;
 
 void report_Health(){
     serialComms.startJsonMsg();
-    if(cycleCount>0) {
-      serialComms.printVar("Rate_us", averageElapse/(cycleCount));
-    } else {
-      serialComms.printVar("Rate_us", 0);
-    }
-    serialComms.printVar("Peak_us", (int)maxElapse);
+//    if(cycleCount>0) {
+//      serialComms.printVar("Rate_us", averageElapse/(cycleCount));
+//    } else {
+//      serialComms.printVar("Rate_us", 0);
+//    }
+//    serialComms.printVar("Peak_us", (int)maxElapse);
+//    serialComms.printVar("x", velX);
+//    serialComms.printVar("y", velY);
+//    serialComms.printVar("r", velR);
 #ifndef RUN_WITHOUT_SERVOS
     serialComms.printVar("Right_Voltage", axm.servoVoltage(RIGHT_BATTERY_SERVO_ID));
     serialComms.printVar("Left_Voltage", axm.servoVoltage(LEFT_BATTERY_SERVO_ID));
@@ -122,7 +129,7 @@ void setup() {
 //    axm.torqueRange(foot_Index, maxJoint_Index, 300);
 //    axm.torqueRange(foot_Index, maxJoint_Index, 900);
     delay(5);
-    axm.freeMoveMode();
+//    axm.freeMoveMode();
 //    axm.holdingMode();
     delay(5);
 }
@@ -163,14 +170,21 @@ void loop() {
     bool ignoreCycle = false;
 
     SerialUSB.println("ik positioning...");
+    
+    
+    Commander command = Commander();
+    command.begin(38400); 
     while(true){
         curTime = millis();
         curMicros = micros();
         if ( (legCalcIndex >= CNT_LEGS) && (gait_Timer < curTime)) {
-            gaitGen.setNextTrajectory(0,100,0.0*M_PI);
+            gaitGen.setNextTrajectory( velX, velY, velR);// |Vel| <= 90, |Rot| <= 0.2*pi
             gaitGen.pushIKtoTarget();
-            axm.initInterpolate(curTime);
-            axm.setTimeToArrival(GAIT_INTERPOLATION_TARGET_TIME);
+            int nextTime = gaitGen.getInterpolationTime();
+            if( (nextTime==GAIT_INTERPOLATION_TARGET_TIME) || axm.interpolateFinished() ){
+              axm.initInterpolate(curTime);
+              axm.setTimeToArrival(gaitGen.getInterpolationTime());
+            }
 
             gaitGen.updateTargetTime(curTime);
             gait_Timer = gait_Rate + curTime;
@@ -190,10 +204,22 @@ void loop() {
         if (legCalcIndex < CNT_LEGS) {
             gaitGen.interpolateNextWalk(legCalcIndex);
             legCalcIndex++;
+        }else{
+            if(command.ReadMsgs()>0){
+                if((command.buttons&BUT_LT) > 0)
+                    gaitGen.switchGaitModulus(2);
+                else if((command.buttons&BUT_RT) > 0)
+                    gaitGen.switchGaitModulus(3);
+                velX = (fabs(command.walkH)>20.0)?DEF_MAX_VEL_TRANS*(command.walkH)/(103.0 + 1.42*fabs(command.walkV)):0;
+                velY = (fabs(command.walkV)>20.0)?DEF_MAX_VEL_TRANS*(command.walkV)/(103.0 + 1.42*fabs(command.walkH)):0;
+                velR = (fabs(command.lookH)>20.0)?DEF_MAX_VEL_ROTATE*(command.lookH)/(103.0):0;
+            }
         }
+        
+        //Time delay
         elapse = micros() - curMicros; 
         //peak: ~32-30 ms when report_Health(),
-       //    2 ms peak otherwise
+        //    2 ms peak otherwise
         delta = minRate*1000 - elapse;
         if(!ignoreCycle){
             averageElapse += elapse;

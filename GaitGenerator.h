@@ -14,12 +14,12 @@
 #define REPORT_IK_FAILURE       1
 //#define USE_GAIT_OVERSHOOT      1
 
-#define DEF_STEP_UP_PERIOD      500.0f
-#define DEF_STEP_HEIGHT         90.0f
-#define DEF_GROUND_HEIGHT       -140.0f //80 min, 180 max
-#define DEF_CENTER_EXTENSION    189.05f
-#define DEF_MAX_VEL_TRANS       200.0//35.0f
-#define DEF_MAX_VEL_ROTATE      1.0472f
+#define DEF_STEP_UP_PERIOD      700.0f//350
+#define DEF_STEP_HEIGHT         150.0f//150
+#define DEF_GROUND_HEIGHT       -200.0f //200
+#define DEF_CENTER_EXTENSION    120.0f//120
+#define DEF_MAX_VEL_TRANS       90.0f//90.0f
+#define DEF_MAX_VEL_ROTATE      0.628f //.2*pi
 
 #define SERVO_INTERPOLATION_RATE 10
 #define GAIT_INTERPOLATION_RATE 100
@@ -29,6 +29,7 @@
 #else
 #define GAIT_INTERPOLATION_TARGET_TIME      (GAIT_INTERPOLATION_RATE)
 #endif
+#define IDLE_INTERPOLATION_TARGET_TIME      2000
 
 enum WALK_STATE_T{
     walk_idle = 0,
@@ -56,7 +57,7 @@ typedef struct _Gait_Descriptor {
 GAIT_DESCRIPTOR gaitDescriptor(int newModulus){
     GAIT_DESCRIPTOR newGait;
     newGait.legModulus = newModulus;
-    newGait.upStepPeriod = DEF_STEP_UP_PERIOD;
+    newGait.upStepPeriod = DEF_STEP_UP_PERIOD/newModulus;
     newGait.stepHeight = DEF_STEP_HEIGHT;
     newGait.groundHeight = DEF_GROUND_HEIGHT;
     newGait.maxTransVelocity = DEF_MAX_VEL_TRANS;
@@ -160,7 +161,10 @@ IK_Error_T GaitManager::interpolateNextWalk(int legIndx){
 }
 
 int GaitManager::getInterpolationTime(){
-    return GAIT_INTERPOLATION_TARGET_TIME;
+    if (cWalkState==walk_idle)
+      return IDLE_INTERPOLATION_TARGET_TIME;
+    else
+      return GAIT_INTERPOLATION_TARGET_TIME;
 }
 
 void GaitManager::pushIKtoTarget() {
@@ -201,7 +205,7 @@ bool GaitManager::setNextTrajectory(float dx, float dy, float dr){
     fTrajectory.dr = dr;
 
     if((vel == 0) && (dr == 0)) {
-        if(cWalkState == walk_idle) {
+        if( (cWalkState == walk_idle) || (cWalkState == walk_stopping) ){
             fWalkState = walk_idle;
         } else {
             fWalkState = walk_stopping;
@@ -256,7 +260,7 @@ void GaitManager::updatePhase(){
         cWalkState = fWalkState;
         if(cWalkState == walk_starting)
           fWalkState = walk_active;
-        if(cWalkState == walk_stopping)
+        else if(cWalkState == walk_stopping)
           fWalkState = walk_idle;
         fraction = 0;
         phase = 0;
@@ -296,7 +300,9 @@ void GaitManager::updatePhase(){
         }
     }
 //    SerialUSB.print("cWalkState: ");
-//    SerialUSB.println(cWalkState);
+//    SerialUSB.print(cWalkState);
+//    SerialUSB.print("   fWalkState: ");
+//    SerialUSB.println(fWalkState);
 //    SerialUSB.print("fraction: ");
 //    SerialUSB.println(fraction);
 //    SerialUSB.print("phase: ");
@@ -323,7 +329,12 @@ void GaitManager::setTarget_Start(int legIndx) {
                     cGait.stepHeight * fabs(sin(M_PI * fraction))
             ));
         }else{
-            legIK.effector((LegIndex)legIndx, legCenters[legIndx]);
+            legIK.effector((LegIndex)legIndx,deltaFromCenter( legIndx, 
+                    0,
+                    0,
+                    0,
+                    0
+            ));
         }
     }
 }
@@ -384,21 +395,34 @@ void GaitManager::setTarget_End(int legIndx) {
                     cGait.stepHeight * fabs(sin(M_PI * fraction))
             ));
         }else{
-            legIK.effector((LegIndex)legIndx, legCenters[legIndx]);
+            legIK.effector((LegIndex)legIndx,deltaFromCenter( legIndx, 
+                    0,
+                    0,
+                    0,
+                    0
+            ));
         }
     }
 }
 
 void GaitManager::setTarget_Idle(int legIndx) {
-    legIK.effector((LegIndex)legIndx, legCenters[legIndx]);
+    legIK.effector((LegIndex)legIndx, deltaFromCenter( legIndx, 
+                    0,
+                    0,
+                    0,
+                    0
+            ));
 }
 
 //--------------//
 //  Leg Placement
 COORD3D GaitManager::deltaFromCenter(int legIndx, float tdx, float tdy, float tdr, float tdz){
     COORD3D newPoint;
-    newPoint.x = cos(tdr)*legCenters[legIndx].x - sin(tdr)*legCenters[legIndx].y + tdx;
-    newPoint.y = sin(tdr)*legCenters[legIndx].x + cos(tdr)*legCenters[legIndx].y + tdy;
+    float centerR = DEF_CENTER_EXTENSION + 95.25;
+    newPoint.x = tdx + centerR*cos(tdr + hipSegment[legIndx].effectorAngle);
+    newPoint.y = tdy + centerR*sin(tdr + hipSegment[legIndx].effectorAngle);
+//    newPoint.x = cos(tdr)*legCenters[legIndx].x - sin(tdr)*legCenters[legIndx].y - tdx;
+//    newPoint.y = sin(tdr)*legCenters[legIndx].x + cos(tdr)*legCenters[legIndx].y - tdy;
     newPoint.z = legCenters[legIndx].z + tdz;
 //        SerialUSB.print("legIndx: ");
 //        SerialUSB.println(legIndx,DEC);

@@ -1,7 +1,7 @@
 #ifndef KRAKEN_SERIALCOMM_H
 #define KRAKEN_SERIALCOMM_H
 
-#define serial_IO       Serial2
+//#define serial_IO       Serial2
 #define serial_Debug    SerialUSB
 
 #define MAX_NUM_COMM_SERIALS     3
@@ -38,9 +38,11 @@ SerialComm::~SerialComm(){
 }
 
 void SerialComm::startJsonMsg(bool isDebugOnly){
-    SerialUSB.print("{");
+    serial_Debug.print("{");
     if(!isDebugOnly){
-        Serial2.print("{");
+#ifdef serial_IO
+        serial_IO.print("{");
+#endif
     }
     isJsonStart = true;
 }
@@ -54,50 +56,57 @@ void SerialComm::printVar(char* varName, float value, bool isDebugOnly){
 
 void SerialComm::printVar_F(char* varName, float value, bool isDebugOnly) {
     if(!isJsonStart){
-        SerialUSB.print(",");
+        serial_Debug.print(",");
     }
-    SerialUSB.print("\"");
-    SerialUSB.print(varName);
-    SerialUSB.print("\":");
-    SerialUSB.print(value,4);
+    serial_Debug.print("\"");
+    serial_Debug.print(varName);
+    serial_Debug.print("\":");
+    serial_Debug.print(value,4);
     
     if(!isDebugOnly){
+#ifdef serial_IO
         if(!isJsonStart){
-            Serial2.print(",");
+            serial_IO.print(",");
         }
-        Serial2.print("\"");
-        Serial2.print(varName);
-        Serial2.print("\":");
-        Serial2.print(value,4);
+        serial_IO.print("\"");
+        serial_IO.print(varName);
+        serial_IO.print("\":");
+        serial_IO.print(value,4);
+#endif
     }
     isJsonStart = false;
 }
 
 void SerialComm::printVar_D(char* varName, int value, bool isDebugOnly){
     if(!isJsonStart){
-        SerialUSB.print(",");
+        serial_Debug.print(",");
     }
-    SerialUSB.print("\"");
-    SerialUSB.print(varName);
-    SerialUSB.print("\":");
-    SerialUSB.print(value,DEC);
+    serial_Debug.print("\"");
+    serial_Debug.print(varName);
+    serial_Debug.print("\":");
+    serial_Debug.print(value,DEC);
     
     if(!isDebugOnly){
+#ifdef serial_IO
         if(!isJsonStart){
-            Serial2.print(",");
+            serial_IO.print(",");
         }
-        Serial2.print("\"");
-        Serial2.print(varName);
-        Serial2.print("\":");
-        Serial2.print(value,DEC);
+        serial_IO.print("\"");
+        serial_IO.print(varName);
+        serial_IO.print("\":");
+        serial_IO.print(value,DEC);
+#endif
     }
     isJsonStart = false;
 }
 
 void SerialComm::endJsonMsg(bool isDebugOnly){
-    SerialUSB.println("}");
-    if(!isDebugOnly)
-        Serial2.println("}");
+    serial_Debug.println("}");
+    if(!isDebugOnly) {
+#ifdef serial_IO
+        serial_IO.println("}");
+#endif
+    }
     isJsonStart = false;
 }
 
