@@ -29,7 +29,7 @@
 #else
 #define GAIT_INTERPOLATION_TARGET_TIME      (GAIT_INTERPOLATION_RATE)
 #endif
-#define IDLE_INTERPOLATION_TARGET_TIME      2000
+#define START_INTERPOLATION_TARGET_TIME      2000
 
 enum WALK_STATE_T{
     walk_idle = 0,
@@ -99,7 +99,9 @@ private:
     float fraction;
     bool midStepToggle;
 
-    COORD3D legCenters[CNT_LEGS];
+    float legCenter_Angles[CNT_LEGS];
+    float legCenter_Radii[CNT_LEGS];
+    float legCenter_Heights[CNT_LEGS];
 
 //--------------//
 //  Internal Gait mechanisms
@@ -161,10 +163,7 @@ IK_Error_T GaitManager::interpolateNextWalk(int legIndx){
 }
 
 int GaitManager::getInterpolationTime(){
-    if (cWalkState==walk_idle)
-      return IDLE_INTERPOLATION_TARGET_TIME;
-    else
-      return GAIT_INTERPOLATION_TARGET_TIME;
+    return GAIT_INTERPOLATION_TARGET_TIME;
 }
 
 void GaitManager::pushIKtoTarget() {
@@ -255,7 +254,14 @@ void GaitManager::updatePhase(){
     int oldPhase = phase;
     
     //phase rollover - increment the offset, time for switching walk state
-    if(fraction > cGait.legModulus) {
+    float phaseEnd = cGait.legModulus;
+    if( (cWalkState == walk_starting) || (cWalkState == walk_stopping)){
+        phaseEnd = cGait.legModulus-1;
+    } else if(cWalkState == walk_idle){
+        phaseEnd = 1.0;
+    }
+    
+    if(fraction > phaseEnd) {
         timeOffset = targetTime;
         cWalkState = fWalkState;
         if(cWalkState == walk_starting)
@@ -418,12 +424,11 @@ void GaitManager::setTarget_Idle(int legIndx) {
 //  Leg Placement
 COORD3D GaitManager::deltaFromCenter(int legIndx, float tdx, float tdy, float tdr, float tdz){
     COORD3D newPoint;
-    float centerR = DEF_CENTER_EXTENSION + 95.25;
-    newPoint.x = tdx + centerR*cos(tdr + hipSegment[legIndx].effectorAngle);
-    newPoint.y = tdy + centerR*sin(tdr + hipSegment[legIndx].effectorAngle);
+    newPoint.x =  - tdx + legCenter_Radii[legIndx]*cos(tdr + legCenter_Angles[legIndx]);
+    newPoint.y =  - tdy + legCenter_Radii[legIndx]*sin(tdr + legCenter_Angles[legIndx]);
 //    newPoint.x = cos(tdr)*legCenters[legIndx].x - sin(tdr)*legCenters[legIndx].y - tdx;
 //    newPoint.y = sin(tdr)*legCenters[legIndx].x + cos(tdr)*legCenters[legIndx].y - tdy;
-    newPoint.z = legCenters[legIndx].z + tdz;
+    newPoint.z = legCenter_Heights[legIndx] + tdz;
 //        SerialUSB.print("legIndx: ");
 //        SerialUSB.println(legIndx,DEC);
 //        SerialUSB.print("x: ");
@@ -438,20 +443,10 @@ COORD3D GaitManager::deltaFromCenter(int legIndx, float tdx, float tdy, float td
 
 void GaitManager::generateCenters() {
     for(int legIndx = 0; legIndx<CNT_LEGS; legIndx++) {
-          legCenters[legIndx] = COORD3D{
-                hipSegment[legIndx].segVect.x + DEF_CENTER_EXTENSION * cos(hipSegment[legIndx].effectorAngle),
-                hipSegment[legIndx].segVect.y + DEF_CENTER_EXTENSION * sin(hipSegment[legIndx].effectorAngle),
-                cGait.groundHeight
-          };
-//        SerialUSB.print("legIndx: ");
-//        SerialUSB.println(legIndx,DEC);
-//        SerialUSB.print("x: ");
-//        SerialUSB.println(legCenters[legIndx].x, 2);
-//        SerialUSB.print("y: ");
-//        SerialUSB.println(legCenters[legIndx].y, 2);    
-//        SerialUSB.print("z: ");
-//        SerialUSB.println(legCenters[legIndx].z, 2);   
-//        SerialUSB.print("\n\n\n");     
+          legCenter_Angles[legIndx] = hipSegment[legIndx].effectorAngle;
+          legCenter_Radii[legIndx] = sqrt( cSquare(hipSegment[legIndx].segVect.x) + cSquare(hipSegment[legIndx].segVect.y) )
+                  + DEF_CENTER_EXTENSION;
+          legCenter_Heights[legIndx] = cGait.groundHeight;
     }
 }
 

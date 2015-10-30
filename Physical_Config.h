@@ -16,7 +16,7 @@
 #define NUMSERVOS           (NUM_SERVOS_PER_LEG*CNT_LEGS + NUM_HEAD_SERVOS)
 
 //Servos for polling battery values
-#define LEFT_BATTERY_SERVO_ID       2
+#define LEFT_BATTERY_SERVO_ID       4
 #define RIGHT_BATTERY_SERVO_ID      1
 
 #define MAX_SERVO_TORQUE            1023 //Preset on the servo's flash, AXM_MAX_TORQUE_L = 14
@@ -75,8 +75,8 @@ static const byte servoTable_ID[NUMSERVOS] = {
     19, 20, 21, 22, 23, 24,     //hipH
     7,  8,  9,  10, 11, 12,     //hipV_cw
     13, 14, 15, 16, 17, 18,     //hipV_ccw
-    1,  2,  3,  4,  5,  6,      //knee
-    101,102,103,104,105,106,    //foot
+    101,102,103,104,105,106,    //knee
+    1,  2,  3,  4,  5,  6,      //foot
 //    , ,                            //head
 };
 
