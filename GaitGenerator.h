@@ -14,20 +14,22 @@
 //#define REPORT_IK_FAILURE       1
 //#define USE_GAIT_OVERSHOOT      1
 
-#define DEF_STEP_HEIGHT         120.0f//150
-#define DEF_GROUND_HEIGHT       -220.0f //200
-#define DEF_CENTER_EXTENSION    120.0f//120
+#define DEF_STEP_HEIGHT         100.0f//120
+#define DEF_GROUND_HEIGHT       -190.0f // safe range: -220, -160
+#define MIN_CROUCH              -30.0
+#define MAX_CROUCH              60.0
+#define DEF_CENTER_EXTENSION    140.0f//safe range: 120, 160
 #define DEF_MAX_VEL_TRANS       90.0f//90.0f
 #define DEF_MAX_VEL_ROTATE      0.628f //.2*pi
 
 #define SERVO_INTERPOLATION_RATE 10
 #define GAIT_INTERPOLATION_RATE 80
 
-#define PRE_STEP_DELAY .025
-#define POST_STEP_DELAY .025
-#define DEF_STEP_UP_PERIOD_STARTING      1000//ms
-#define DEF_STEP_UP_PERIOD_ACTIVE        700//ms
-#define DEF_STEP_UP_PERIOD_STOPPING      1500//ms
+#define PRE_STEP_DELAY .01
+#define POST_STEP_DELAY .01
+#define DEF_STEP_DOWN_PERIOD_STARTING      1000//ms
+#define DEF_STEP_DOWN_PERIOD_ACTIVE        800//ms
+#define DEF_STEP_DOWN_PERIOD_STOPPING      1000//ms
 
 #ifdef USE_GAIT_OVERSHOOT
 #define GAIT_INTERPOLATION_TARGET_TIME      (GAIT_INTERPOLATION_RATE+SERVO_INTERPOLATION_RATE)
@@ -62,7 +64,7 @@ typedef struct _Gait_Descriptor {
 GAIT_DESCRIPTOR gaitDescriptor(int newModulus){
     GAIT_DESCRIPTOR newGait;
     newGait.legModulus = newModulus;
-    newGait.upStepPeriod = DEF_STEP_UP_PERIOD_STARTING;
+    newGait.upStepPeriod = DEF_STEP_DOWN_PERIOD_STARTING;
     newGait.stepHeight = DEF_STEP_HEIGHT;
     newGait.groundHeight = DEF_GROUND_HEIGHT;
     newGait.maxTransVelocity = DEF_MAX_VEL_TRANS;
@@ -113,8 +115,11 @@ public:
 //  Gait transitions
     void switchGaitModulus(int newModulus);
     bool setNextTrajectory(float dx, float dy, float dr);
+    void setCrouch(float newCrouch);
+    void modifyCrouch(float delta);
 
 private:
+    float crouch;
     WALK_STATE_T cWalkState;
     WALK_STATE_T fWalkState;
     GAIT_DESCRIPTOR cGait;
@@ -131,7 +136,7 @@ private:
     float fraction;
     bool midStepToggle;
     
-    //Phase params
+    //Phase params; internally use by leg targeting
         int legMod; //leg index % gait modulus
         int legModDelta; // (legMod - phase) % gait modulus
         float legDeltaModuloFactor;// = 2/(cGait.legModulus-1.0);
@@ -141,6 +146,16 @@ private:
     float legCenter_Angles[CNT_LEGS];
     float legCenter_Radii[CNT_LEGS];
     float legCenter_Heights[CNT_LEGS];
+    
+    float legCurrentDelta_x[CNT_LEGS];
+    float legCurrentDelta_y[CNT_LEGS];
+    float legCurrentDelta_r[CNT_LEGS];
+    float legCurrentDelta_z[CNT_LEGS];
+    
+//    float legTargetDelta_x[CNT_LEGS];
+//    float legTargetDelta_y[CNT_LEGS];
+//    float legTargetDelta_r[CNT_LEGS];
+//    float legTargetDelta_z[CNT_LEGS];
 
 //--------------//
 //  Internal Gait mechanisms
@@ -159,6 +174,7 @@ private:
 
 
 GaitManager::GaitManager(void){
+    crouch = 0.0;
     cWalkState = walk_idle;
     fWalkState = walk_idle;
     cGait = gaitDescriptor(2);
@@ -224,6 +240,10 @@ void GaitManager::pushIKtoTarget() {
                     LIMIT(ANGLE_TO_SERVO(legIK.angle_knee(legIndx), false), 0, 1023);
             servoTable_Target[foot_Index + i] =
                     LIMIT(ANGLE_TO_SERVO(legIK.angle_ankle(legIndx), false), 0, 1023);
+//            legCurrentDelta_x[i] = legTargetDelta_x[i];
+//            legCurrentDelta_y[i] = legTargetDelta_y[i];
+//            legCurrentDelta_r[i] = legTargetDelta_r[i];
+//            legCurrentDelta_z[i] = legTargetDelta_z[i];
         }
 //          if( (fraction == 1.0)){
 //              SerialUSB.print("legIndx: ");
@@ -280,6 +300,17 @@ bool GaitManager::setNextTrajectory(float dx, float dy, float dr){
     }
 }
 
+void GaitManager::setCrouch(float newCrouch){
+    crouch = LIMIT(newCrouch,MIN_CROUCH,MAX_CROUCH);
+    for(int legIndx=0; legIndx<CNT_LEGS; legIndx++){
+      legCenter_Heights[legIndx] = cGait.groundHeight + crouch;
+    }
+}
+
+void GaitManager::modifyCrouch(float delta){
+    setCrouch(crouch+delta);
+}
+
 //--------------//
 //  Internal Gait mechanisms
 void GaitManager::setTarget(int legIndx){
@@ -316,26 +347,29 @@ void GaitManager::updatePhase(){
     if((fraction == 0.0) && (stateEndPhase <= 0)) {
         if(fWalkState == walk_starting){
           cWalkState = fWalkState;
-          cGait.upStepPeriod = DEF_STEP_UP_PERIOD_STARTING/(cGait.legModulus-1);
+          cGait.upStepPeriod = DEF_STEP_DOWN_PERIOD_STARTING/(cGait.legModulus-1);
           fWalkState = walk_active;
           stateEndPhase = cGait.legModulus; //2 for mod2
           phase = 0;
         }else if(fWalkState == walk_stopping){
           cWalkState = fWalkState;
-          cGait.upStepPeriod = DEF_STEP_UP_PERIOD_STOPPING/(cGait.legModulus-1);
+          cGait.upStepPeriod = DEF_STEP_DOWN_PERIOD_STOPPING/(cGait.legModulus-1);
           fWalkState = walk_idle;
           stateEndPhase = cGait.legModulus;//2;
         }else if(fWalkState == walk_idle){
           cWalkState = fWalkState;
-          cGait.upStepPeriod = DEF_STEP_UP_PERIOD_STOPPING/(cGait.legModulus-1);
+          cGait.upStepPeriod = DEF_STEP_DOWN_PERIOD_STOPPING/(cGait.legModulus-1);
           stateEndPhase = 0;
           phase = 0;
         }else if (fWalkState == walk_active){
           if(cWalkState != walk_active){
             phase = 0;
             cWalkState = walk_active;  
-            cGait.upStepPeriod = DEF_STEP_UP_PERIOD_ACTIVE/(cGait.legModulus-1); 
-          } 
+            cGait.upStepPeriod = DEF_STEP_DOWN_PERIOD_ACTIVE/(cGait.legModulus-1); 
+          } else {
+                //Switch to new trajectory is safe only after a midstep!
+                cTrajectory = fTrajectory;
+          }
           stateEndPhase = 0;
         }
     }
@@ -357,16 +391,8 @@ void GaitManager::updatePhase(){
     if(cWalkState == walk_active) {
         if (fraction == 0.0) {
             midStepToggle = false;
-//            if (cGait.legModulus == 3) {
-                //Switch to new trajectory is safe in legMod == 3 when at full step
-                cTrajectory = fTrajectory;
-//            }
         } else if((fraction >= 0.5) && (!midStepToggle)) {
             midStepToggle = true;
-//            if (cGait.legModulus == 2) {
-//                //Switch to new trajectory is safe in legMod == 2 when at half step
-//                cTrajectory = fTrajectory;
-//            }
         }
     }
     
@@ -422,9 +448,9 @@ void GaitManager::setTarget_MidStep(int legIndx) {
         legStartDelta = legDeltaModuloFactor*(legModDelta) - 1.0;
         legStopDelta = legDeltaModuloFactor*(legModDelta - 1.0) - 1.0;
         legIK.effector((LegIndex)legIndx, deltaFromCenter( legIndx,
-                drawTransition(fraction,legStartDelta*cTrajectory.dx,legStopDelta*cTrajectory.dx,true,true,PRE_STEP_DELAY,POST_STEP_DELAY),
-                drawTransition(fraction,legStartDelta*cTrajectory.dy,legStopDelta*cTrajectory.dy,true,true,PRE_STEP_DELAY,POST_STEP_DELAY),
-                drawTransition(fraction,legStartDelta*cTrajectory.dr,legStopDelta*cTrajectory.dr,true,true,PRE_STEP_DELAY,POST_STEP_DELAY),
+                drawTransition(fraction,legStartDelta*cTrajectory.dx,legStopDelta*fTrajectory.dx,true,true,PRE_STEP_DELAY,POST_STEP_DELAY),
+                drawTransition(fraction,legStartDelta*cTrajectory.dy,legStopDelta*fTrajectory.dy,true,true,PRE_STEP_DELAY,POST_STEP_DELAY),
+                drawTransition(fraction,legStartDelta*cTrajectory.dr,legStopDelta*fTrajectory.dr,true,true,PRE_STEP_DELAY,POST_STEP_DELAY),
                 0
         ));
     }
@@ -471,10 +497,17 @@ void GaitManager::setTarget_End(int legIndx) {
           //The robot always starts endsteps with lifting the leg set that includes leg index 0 (it is foreright footed!)
           legStopDelta = legDeltaModuloFactor*(legModDelta - 1.0) - 1.0;
           legIK.effector((LegIndex)legIndx, deltaFromCenter( legIndx,
-                  drawTransition(fraction,legStopDelta*cTrajectory.dx,0,true,true,PRE_STEP_DELAY,POST_STEP_DELAY),
-                  drawTransition(fraction,legStopDelta*cTrajectory.dy,0,true,true,PRE_STEP_DELAY,POST_STEP_DELAY),
-                  drawTransition(fraction,legStopDelta*cTrajectory.dr,0,true,true,PRE_STEP_DELAY,POST_STEP_DELAY),
+                  drawTransition(fraction,legCurrentDelta_x[legIndx],0,true,true,PRE_STEP_DELAY,POST_STEP_DELAY),
+                  drawTransition(fraction,legCurrentDelta_y[legIndx],0,true,true,PRE_STEP_DELAY,POST_STEP_DELAY),
+                  drawTransition(fraction,legCurrentDelta_r[legIndx],0,true,true,PRE_STEP_DELAY,POST_STEP_DELAY),
                   cGait.stepHeight * 0.5* fabs(1-cos(2*M_PI * fraction ))
+          ));
+    }else{
+          legIK.effector((LegIndex)legIndx, deltaFromCenter( legIndx,
+                  legCurrentDelta_x[legIndx],
+                  legCurrentDelta_y[legIndx],
+                  legCurrentDelta_r[legIndx],
+                  legCurrentDelta_z[legIndx]
           ));
     }
 }
@@ -494,9 +527,15 @@ COORD3D GaitManager::deltaFromCenter(int legIndx, float tdx, float tdy, float td
     COORD3D newPoint;
     newPoint.x =  .5*tdx + legCenter_Radii[legIndx]*cos(-.5*tdr + legCenter_Angles[legIndx]);
     newPoint.y =  .5*tdy + legCenter_Radii[legIndx]*sin(-.5*tdr + legCenter_Angles[legIndx]);
-//    newPoint.x = cos(tdr)*legCenters[legIndx].x - sin(tdr)*legCenters[legIndx].y - tdx;
-//    newPoint.y = sin(tdr)*legCenters[legIndx].x + cos(tdr)*legCenters[legIndx].y - tdy;
     newPoint.z = legCenter_Heights[legIndx] + tdz;
+//    legTargetDelta_x[legIndx] = tdx;
+//    legTargetDelta_y[legIndx] = tdy;
+//    legTargetDelta_r[legIndx] = tdr;
+//    legTargetDelta_z[legIndx] = tdz;
+    legCurrentDelta_x[legIndx] = tdx;
+    legCurrentDelta_y[legIndx] = tdy;
+    legCurrentDelta_r[legIndx] = tdr;
+    legCurrentDelta_z[legIndx] = tdz;
 //    if( (newPoint.z != -200)){
 //        SerialUSB.print("legIndx: ");
 ////        SerialUSB.println(legIndx,DEC);
@@ -522,10 +561,11 @@ void GaitManager::generateCenters() {
           legCenter_Angles[legIndx] = hipSegment[legIndx].effectorAngle;
           legCenter_Radii[legIndx] = sqrt( cSquare(hipSegment[legIndx].segVect.x) + cSquare(hipSegment[legIndx].segVect.y) )
                   + DEF_CENTER_EXTENSION;
-          legCenter_Heights[legIndx] = cGait.groundHeight;
+          legCenter_Heights[legIndx] = cGait.groundHeight + crouch;
     }
 }
 
 extern GaitManager gaitGen;
 
 #endif //KRAKEN_GAITGENERATOR_H
+

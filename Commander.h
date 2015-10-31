@@ -62,4 +62,72 @@ class Commander
     unsigned char status; 
 };
 
+#define serial_Commander       Serial3
+
+/* Constructor */
+Commander::Commander(){
+    index = -1;
+    status = 0;
+}
+
+void Commander::begin(int baud){
+    serial_Commander.begin(baud);
+}
+
+/* SouthPaw Support */
+void Commander::UseSouthPaw(){
+    status |= 0x01;
+}
+
+/* process messages coming from Commander 
+ *  format = 0xFF RIGHT_H RIGHT_V LEFT_H LEFT_V BUTTONS EXT CHECKSUM */
+int Commander::ReadMsgs(){
+    while(serial_Commander.available() > 0){
+        if(index == -1){         // looking for new packet
+            if(serial_Commander.read() == 0xff){
+                index = 0;
+                checksum = 0;
+            }
+        }else if(index == 0){
+            vals[index] = (unsigned char) serial_Commander.read();
+            if(vals[index] != 0xff){            
+                checksum += (int) vals[index];
+                index++;
+            }
+        }else{
+            vals[index] = (unsigned char) serial_Commander.read();
+            checksum += (int) vals[index];
+            index++;
+            if(index == 7){ // packet complete
+                if(checksum%256 != 255){
+                    // packet error!
+                    index = -1;
+                    return 0;
+                }else{
+                    if((status&0x01) > 0){     // SouthPaw
+                        walkV = (signed char)( (int)vals[0]-128 );
+                        walkH = (signed char)( (int)vals[1]-128 );
+                        lookV = (signed char)( (int)vals[2]-128 );
+                        lookH = (signed char)( (int)vals[3]-128 );
+                    }else{
+                        lookV = (signed char)( (int)vals[0]-128 );
+                        lookH = (signed char)( (int)vals[1]-128 );
+                        walkV = (signed char)( (int)vals[2]-128 );
+                        walkH = (signed char)( (int)vals[3]-128 );
+                    }
+                    pan = (vals[0]<<8) + vals[1];
+                    tilt = (vals[2]<<8) + vals[3];
+                    buttons = vals[4];
+                    ext = vals[5];
+                }
+                index = -1;
+                serial_Commander.flush();
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
 #endif
+

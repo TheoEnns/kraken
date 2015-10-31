@@ -37,9 +37,11 @@ unsigned long gait_Rate = GAIT_INTERPOLATION_RATE;
 unsigned long servo_Rate = 10;
 unsigned long minCPURate = 5;
 unsigned long curMicros = 0;
+#ifdef REPORT_CPU_STATS
 float averageElapse;
 float maxElapse;
 int cycleCount;
+#endif
 float velY = 0;
 float velX = 0;
 float velR = 0;
@@ -49,6 +51,7 @@ int delta_CPUCycleTime = 0;
 int toggleRobotPowerCounter; //On/Off button on remote
 
 #define ROBOT_POWER_TRIGGER  30
+#define TORQUE_LIMIT  900
 
 enum HEALTH_ERROR {
     HEALTH_ERR_RIGHT_BATT_EXHAUSTED,
@@ -61,6 +64,7 @@ enum HEALTH_ERROR {
 void setup() {
     Serial2.begin(115200);
     SerialUSB.begin();
+    command.begin(38400); 
     delay(2000);
 }
 
@@ -75,7 +79,9 @@ void loop() {
     health_Timer = millis() + health_Timer;
     gait_Timer = millis() + gait_Rate;
     servo_Timer = millis() + servo_Rate;
+#ifdef REPORT_CPU_STATS
     cycleCount = 0;
+#endif
     
     //Check health
     bool isHealthy = report_Health() == 0;
@@ -88,9 +94,9 @@ void loop() {
     
         //Stand up
         SerialUSB.println("standing...");
-        delay(5);
+        delay(15);
         axm.holdingMode();
-        delay(5);
+        delay(15);
         gaitGen.setNextTrajectory( 0, 0, 0);
         for(int i=0; i < CNT_LEGS;i++) {
           gaitGen.interpolateNextWalk((LegIndex)i);
@@ -107,7 +113,6 @@ void loop() {
         
         //Enter Walk State
         SerialUSB.println("ready to walk...");
-        command.begin(38400); 
         while( isHealthy && (toggleRobotPowerCounter < ROBOT_POWER_TRIGGER)){
           isHealthy = performCycle(true, true, true, true);
         }
@@ -127,13 +132,14 @@ void loop() {
         axm.initInterpolate(millis());
         axm.setTimeToArrival(cpu_TimeOffset);
         delay(5);
-        axm.holdingMode();
-        delay(5);
         while(!axm.interpolateFinished()){
             delay(servo_Rate);
             cpu_Timer = millis();
             axm.interpolatePoses(cpu_Timer);
         }    
+        delay(10);
+        axm.speedLimits(250);
+        delay(10);
         initServoTable(hipH_Index, hipH_Index+6, 512);
         initServoTable(hipV_cw_Index, hipV_cw_Index+6, 819);
         initServoTable(hipV_ccw_Index, hipV_ccw_Index+6, 155);
@@ -141,6 +147,7 @@ void loop() {
 //      initServoTable(foot_Index, foot_Index+6, 512);
         axm.pushPose(0, NUMSERVOS);
         waitOnServos(0, NUMSERVOS);
+        delay(500);
         
         
         axm.toggleTorques(false);
@@ -161,14 +168,15 @@ void initServoTable(int startIndx, int endIndx, word pos){
 }
 
 void waitOnServos(int startIndx, int endIndx){
-   delay(250);
+   delay(500);
 #ifndef RUN_WITHOUT_SERVOS
     for (int servo_Idx = startIndx; servo_Idx < endIndx; servo_Idx++){
         while (axm.is_moving(servo_Idx)){
-            delay(5);
+            delay(20);
+            cpu_Timer = millis();
             if (health_Timer < cpu_Timer) {
                 report_Health();
-                health_Timer = 2500 + cpu_Timer;
+                health_Timer = health_Rate + cpu_Timer;
             }
         }
     }
@@ -200,17 +208,21 @@ int report_Health(){
     serialComms.printVar("Left_Voltage", leftBatt);
     serialComms.endJsonMsg();
     
+#ifdef REPORT_CPU_STATS
     //Reset CPU Stats
     averageElapse = 0;
     maxElapse = 0;
     cycleCount = 0;
+#endif
     
     return healthCode;
 }
 
 bool performCycle(bool reportOnHealth, bool useAxmInterpolation, bool useLegIK, bool useGaitGen){
     bool stopTrigger = false;
+#ifdef REPORT_CPU_STATS
     bool ignoreCycle = false;
+#endif
     cpu_Timer = millis();
     curMicros = micros();
     
@@ -240,7 +252,9 @@ bool performCycle(bool reportOnHealth, bool useAxmInterpolation, bool useLegIK, 
           if(report_Health() > 0)
               stopTrigger = true;
           health_Timer = health_Rate + cpu_Timer;
+#ifdef REPORT_CPU_STATS
           ignoreCycle = true;
+#endif
       }
     }
       
@@ -265,6 +279,13 @@ bool performCycle(bool reportOnHealth, bool useAxmInterpolation, bool useLegIK, 
         velX = (fabs(command.walkH)>20.0)?DEF_MAX_VEL_TRANS*(command.walkH)/(103.0 + 1.42*fabs(command.walkV)):0;
         velY = (fabs(command.walkV)>20.0)?DEF_MAX_VEL_TRANS*(command.walkV)/(103.0 + 1.42*fabs(command.walkH)):0;
         velR = (fabs(command.lookH)>20.0)?DEF_MAX_VEL_ROTATE*(command.lookH)/(103.0):0;
+        if(fabs(command.lookV)>60.0){
+          if (command.lookV>0){
+            gaitGen.modifyCrouch( 1.5 ); //Commander update at 30Hz
+          }else{
+            gaitGen.modifyCrouch( -1.5 ); //Commander update at 30Hz
+          }
+        }
     }
     
     //Time delay
@@ -272,6 +293,7 @@ bool performCycle(bool reportOnHealth, bool useAxmInterpolation, bool useLegIK, 
     //peak: ~32-30 ms when report_Health(),
     //    2 ms peak otherwise
     delta_CPUCycleTime = minCPURate*1000 - elapseCPU;
+#ifdef REPORT_CPU_STATS
     if(!ignoreCycle){
         averageElapse += elapseCPU;
         maxElapse = maxElapse>elapseCPU?maxElapse:elapseCPU;
@@ -279,6 +301,7 @@ bool performCycle(bool reportOnHealth, bool useAxmInterpolation, bool useLegIK, 
     } else {
       ignoreCycle = false;
     }
+#endif
     if(delta_CPUCycleTime > 0) {
         delayMicroseconds(delta_CPUCycleTime);
     }
@@ -290,7 +313,7 @@ void initToSafePosition(){
     delay(5);
 
     //Move to init pose
-    axm.speedLimits(350);
+    axm.speedLimits(250);
     delay(5);
 //    axm.freeMoveMode();
     delay(5);
@@ -341,8 +364,10 @@ void initToSafePosition(){
     delay(5);
     axm.toggleTorques(true);
 //    axm.toggleTorques(hipH_Index, maxJoint_Index, true);
-    delay(5);
+    delay(10);
+    axm.torqueRange(0, NUMSERVOS, TORQUE_LIMIT);
 //    axm.holdingMode();
-    delay(5);
+    delay(10);
 }
+
 

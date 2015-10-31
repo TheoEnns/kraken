@@ -425,3 +425,4 @@ bool AxManager::bulkTransmitTable(uint32_t idx_setMask, word * table, int regist
 extern AxManager axm;
 
 #endif //KRAKEN_AX_UTILITIES_H
+

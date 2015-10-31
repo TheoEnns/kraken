@@ -235,3 +235,4 @@ bool constrictARC(P_ARC2D * mArc, float lowSwing, float highSwing, float lowReac
 }
 
 #endif //KRAKEN_PHYSICAL_TYPES_AND_CONVERSIONS_H
+
