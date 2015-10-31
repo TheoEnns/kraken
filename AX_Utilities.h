@@ -9,7 +9,7 @@
 
 //#define FREE_MOVE_SLOPE 0x80
 #define FREE_MOVE_SLOPE 0x80
-#define HOLDING_SLOPE 0x20
+#define HOLDING_SLOPE 0x40
 
 #define dxlSuccessThreshold 2
 #define DXL_BUS_SERIAL1 1  //Dynamixel on Serial1(USART1) for 1000000 baud  <-OpenCM9.04

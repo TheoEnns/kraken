@@ -8,7 +8,7 @@
 
 // COMPILE OPTIONS
 #define RUN_WITHOUT_SERVOS 1
-#define REPORT_CPU_STATS 1
+//#define REPORT_CPU_STATS 1
 
 //Local includes
 #include "Physical_Types_And_Conversions.h"
@@ -88,13 +88,15 @@ void loop() {
     
         //Stand up
         SerialUSB.println("standing...");
+        delay(5);
         axm.holdingMode();
+        delay(5);
         gaitGen.setNextTrajectory( 0, 0, 0);
         for(int i=0; i < CNT_LEGS;i++) {
           gaitGen.interpolateNextWalk((LegIndex)i);
         }
         gaitGen.pushIKtoTarget();
-        cpu_TimeOffset = 1000;
+        cpu_TimeOffset = 1300;
         axm.initInterpolate(millis());
         axm.setTimeToArrival(cpu_TimeOffset);
         while(!axm.interpolateFinished()){
@@ -121,17 +123,19 @@ void loop() {
             legIK.leg3DOF_Inverse((LegIndex)i);
         }
         gaitGen.pushIKtoTarget();
-        cpu_TimeOffset = 4000;
+        cpu_TimeOffset = 2500;
         axm.initInterpolate(millis());
         axm.setTimeToArrival(cpu_TimeOffset);
+        delay(5);
         axm.holdingMode();
+        delay(5);
         while(!axm.interpolateFinished()){
             delay(servo_Rate);
             cpu_Timer = millis();
             axm.interpolatePoses(cpu_Timer);
         }    
         initServoTable(hipH_Index, hipH_Index+6, 512);
-        initServoTable(hipV_cw_Index, hipV_cw_Index+6, 869);
+        initServoTable(hipV_cw_Index, hipV_cw_Index+6, 819);
         initServoTable(hipV_ccw_Index, hipV_ccw_Index+6, 155);
         initServoTable(knee_Index, knee_Index+6, 750);
 //      initServoTable(foot_Index, foot_Index+6, 512);
@@ -157,7 +161,7 @@ void initServoTable(int startIndx, int endIndx, word pos){
 }
 
 void waitOnServos(int startIndx, int endIndx){
-   delay(150);
+   delay(250);
 #ifndef RUN_WITHOUT_SERVOS
     for (int servo_Idx = startIndx; servo_Idx < endIndx; servo_Idx++){
         while (axm.is_moving(servo_Idx)){
@@ -286,9 +290,9 @@ void initToSafePosition(){
     delay(5);
 
     //Move to init pose
-    axm.speedLimits(450);
+    axm.speedLimits(350);
     delay(5);
-    axm.freeMoveMode();
+//    axm.freeMoveMode();
     delay(5);
     
     //Move HipH to init pose
@@ -305,8 +309,8 @@ void initToSafePosition(){
     delay(5);
     axm.toggleTorques(hipV_cw_Index, 12, true);
     delay(5);
-    initServoTable(hipV_cw_Index, hipV_cw_Index+6, 869);
-    initServoTable(hipV_ccw_Index, hipV_ccw_Index+6, 155);
+    initServoTable(hipV_cw_Index, hipV_cw_Index+6, 819);
+    initServoTable(hipV_ccw_Index, hipV_ccw_Index+6, 205);
     axm.pushPose(hipV_cw_Index, 12);
     waitOnServos(hipV_cw_Index, hipV_cw_Index+12);
 
@@ -338,7 +342,7 @@ void initToSafePosition(){
     axm.toggleTorques(true);
 //    axm.toggleTorques(hipH_Index, maxJoint_Index, true);
     delay(5);
-    axm.holdingMode();
+//    axm.holdingMode();
     delay(5);
 }
 

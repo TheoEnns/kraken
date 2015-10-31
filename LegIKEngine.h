@@ -240,8 +240,9 @@ IK_Error_T LegIKEngine::leg3DOF_Inverse(LegIndex lgIndx) {
         return error;
     }
 
+    
     //Use law of cosines to get leg tilt
-    float sN = cSquare(segLengths[femur_Type]) - cSquare(segLengths[tibia_Type]) + cSquare(extension);
+    float sN = cSquare(segLengths[femur_Type]) - cSquare(segLengths[tibia_Type]) + cSquare(extension); //Use law of cosines to get leg tilt
     float sD = 2*segLengths[femur_Type]*extension;
     if ( fabs(sN) > fabs(sD) ){
         thisLeg->isValidEffector = false;
@@ -250,7 +251,7 @@ IK_Error_T LegIKEngine::leg3DOF_Inverse(LegIndex lgIndx) {
         IK_DEBUG_END
         return error;
     }
-    float legAngleTilt = acos(sN/(sD));
+    float legAngleTilt = acos(sN/(sD)); //Use law of cosines to get leg tilt
 
     //Get hipV
     raw_angle = legAngleTilt + atan2(v_hip2target.y,v_hip2target.x);

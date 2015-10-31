@@ -152,7 +152,7 @@ const JOINT3D femurStructure[CNT_LEGS] =
 //Y-Axis: The upwards direction for the robot
 //Z-Axis: The clockwise direction about the robot for the leg
 const SEGMENT3D tibiaSegment =
-        {{ 29.2328f, -119.0263f, 0.0f},    (90.0f)*M_PI/180.0f,   (-90.0f)*M_PI/180.0f,    0.257004f};
+        {{ 34.429f, -119.0263f, 0.0f},    (90.0f)*M_PI/180.0f,   (-90.0f)*M_PI/180.0f,    0.257004f};
 //        {{ 34.429f, -131.0f, 0.0f},    (90.0f)*M_PI/180.0f,   (-90.0f)*M_PI/180.0f,    0.257004f};
 const JOINT3D tibiaStructure[CNT_LEGS] =
     {
