@@ -17,7 +17,7 @@
 #define DEF_STEP_HEIGHT         100.0f//120
 #define DEF_GROUND_HEIGHT       -190.0f // safe range: -220, -160
 #define MIN_CROUCH              -30.0
-#define MAX_CROUCH              60.0
+#define MAX_CROUCH              30.0
 #define DEF_CENTER_EXTENSION    140.0f//safe range: 120, 160
 #define DEF_MAX_VEL_TRANS       90.0f//90.0f
 #define DEF_MAX_VEL_ROTATE      0.628f //.2*pi
