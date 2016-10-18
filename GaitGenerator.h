@@ -15,9 +15,9 @@
 //#define USE_GAIT_OVERSHOOT      1
 
 #define DEF_STEP_HEIGHT         100.0f//120
-#define DEF_GROUND_HEIGHT       -190.0f // safe range: -220, -160
-#define MIN_CROUCH              -30.0
-#define MAX_CROUCH              30.0
+#define DEF_GROUND_HEIGHT       -220.0f // safe range: -220, -160
+#define MIN_CROUCH              0.0
+#define MAX_CROUCH              60.0
 #define DEF_CENTER_EXTENSION    140.0f//safe range: 120, 160
 #define DEF_MAX_VEL_TRANS       90.0f//90.0f
 #define DEF_MAX_VEL_ROTATE      0.628f //.2*pi
@@ -27,9 +27,9 @@
 
 #define PRE_STEP_DELAY .01
 #define POST_STEP_DELAY .01
-#define DEF_STEP_DOWN_PERIOD_STARTING      1000//ms
-#define DEF_STEP_DOWN_PERIOD_ACTIVE        800//ms
-#define DEF_STEP_DOWN_PERIOD_STOPPING      1000//ms
+#define DEF_STEP_DOWN_PERIOD_STARTING      550//ms
+#define DEF_STEP_DOWN_PERIOD_ACTIVE        750//ms
+#define DEF_STEP_DOWN_PERIOD_STOPPING      550//ms
 
 #ifdef USE_GAIT_OVERSHOOT
 #define GAIT_INTERPOLATION_TARGET_TIME      (GAIT_INTERPOLATION_RATE+SERVO_INTERPOLATION_RATE)

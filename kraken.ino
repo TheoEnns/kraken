@@ -51,7 +51,7 @@ int delta_CPUCycleTime = 0;
 int toggleRobotPowerCounter; //On/Off button on remote
 
 #define ROBOT_POWER_TRIGGER  30
-#define TORQUE_LIMIT  900
+#define TORQUE_LIMIT  1023
 
 enum HEALTH_ERROR {
     HEALTH_ERR_RIGHT_BATT_EXHAUSTED,
@@ -168,7 +168,7 @@ void initServoTable(int startIndx, int endIndx, word pos){
 }
 
 void waitOnServos(int startIndx, int endIndx){
-   delay(500);
+   delay(350);
 #ifndef RUN_WITHOUT_SERVOS
     for (int servo_Idx = startIndx; servo_Idx < endIndx; servo_Idx++){
         while (axm.is_moving(servo_Idx)){
